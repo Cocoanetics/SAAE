@@ -1,13 +1,13 @@
 import Foundation
 
 /// Documentation structure for parsing Swift documentation comments
-public struct Documentation: Codable {
-    public let description: String
-    public let parameters: [String: String]
-    public let returns: String?
-    public let throwsInfo: String?
+internal struct Documentation: Codable {
+    internal let description: String
+    internal let parameters: [String: String]
+    internal let returns: String?
+    internal let throwsInfo: String?
     
-    public init(from text: String) {
+    internal init(from text: String) {
         var description = ""
         var parameters: [String: String] = [:]
         var returns: String?

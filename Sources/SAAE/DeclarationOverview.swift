@@ -1,28 +1,28 @@
 import Foundation
 
 /// Represents the complete overview of a Swift file including imports and declarations
-public struct CodeOverview: Codable {
-    public let imports: [String]
-    public let declarations: [DeclarationOverview]
+internal struct CodeOverview: Codable {
+    internal let imports: [String]
+    internal let declarations: [DeclarationOverview]
     
-    public init(imports: [String], declarations: [DeclarationOverview]) {
+    internal init(imports: [String], declarations: [DeclarationOverview]) {
         self.imports = imports
         self.declarations = declarations
     }
 }
 
 /// Represents a declaration in the overview
-public struct DeclarationOverview: Codable {
-    public let path: String
-    public let type: String
-    public let name: String
-    public let fullName: String?
-    public let signature: String?
-    public let visibility: String
-    public let documentation: Documentation?
-    public let members: [DeclarationOverview]?
+internal struct DeclarationOverview: Codable {
+    internal let path: String
+    internal let type: String
+    internal let name: String
+    internal let fullName: String?
+    internal let signature: String?
+    internal let visibility: String
+    internal let documentation: Documentation?
+    internal let members: [DeclarationOverview]?
     
-    public init(
+    internal init(
         path: String,
         type: String,
         name: String,

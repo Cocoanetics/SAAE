@@ -45,18 +45,23 @@ public class SAAE {
     /// Generate an overview of declarations in the parsed AST
     /// - Parameters:
     ///   - astHandle: The AST handle obtained from a parse operation
-    ///   - format: Output format (.json, .yaml, .markdown)
+    ///   - format: Output format (.json, .yaml, .markdown, .interface)
     ///   - minVisibility: Minimum visibility level to include
     /// - Returns: String containing the generated overview
     /// - Throws: SAAEError if AST handle is invalid
     public func generateOverview(
         astHandle: ASTHandle,
         format: OutputFormat = .json,
-        minVisibility: VisibilityLevel = .internal
+        minVisibility: SAAE.VisibilityLevel = .internal
     ) throws -> String {
         guard let sourceFile = astStorage[astHandle.id] else {
             throw SAAEError.invalidASTHandle
         }
+        
+        // Collect imports first
+        let importVisitor = ImportVisitor()
+        importVisitor.walk(sourceFile)
+        let imports = importVisitor.imports
         
         let visitor = DeclarationVisitor(minVisibility: minVisibility)
         visitor.walk(sourceFile)
@@ -70,6 +75,8 @@ public class SAAE {
             return try generateYAMLOutput(overviews)
         case .markdown:
             return generateMarkdownOutput(overviews)
+        case .interface:
+            return generateInterfaceOutput(overviews, imports: imports)
         }
     }
     
@@ -85,6 +92,195 @@ public class SAAE {
     private func generateYAMLOutput(_ overviews: [DeclarationOverview]) throws -> String {
         let encoder = YAMLEncoder()
         return try encoder.encode(overviews)
+    }
+    
+    private func generateInterfaceOutput(_ overviews: [DeclarationOverview], imports: [String]) -> String {
+        var interface = ""
+        
+        // Add imports at the top
+        for importName in imports.sorted() {
+            interface += "import \(importName)\n"
+        }
+        
+        if !imports.isEmpty {
+            interface += "\n"
+        }
+        
+        func addDeclaration(_ decl: DeclarationOverview, indentLevel: Int = 0) {
+            let indent = String(repeating: "   ", count: indentLevel)
+            
+            // Add documentation if available
+            if let documentation = decl.documentation {
+                let hasParameters = !documentation.parameters.isEmpty
+                let hasReturns = documentation.returns != nil
+                let hasThrows = documentation.throwsInfo != nil
+                let hasDescription = !documentation.description.isEmpty
+                
+                // Determine if we need block comment format
+                let needsBlockFormat = hasParameters || hasReturns || hasThrows
+                
+                if hasDescription {
+                    let descriptionLines = documentation.description.components(separatedBy: .newlines)
+                    let nonEmptyLines = descriptionLines.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    
+                    // Use /** */ format for multi-line descriptions OR when there are parameters/returns/throws
+                    let isMultiLine = nonEmptyLines.count > 1
+                    let useBlockFormat = needsBlockFormat || isMultiLine
+                    
+                    if useBlockFormat {
+                        // Use /** */ format for complex documentation or multi-line descriptions
+                        interface += "\(indent)/**\n"
+                        for line in nonEmptyLines {
+                            interface += "\(indent) \(line.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                        }
+                        
+                        // Add blank line before parameters/returns/throws if there's a description and parameters exist
+                        if hasDescription && (hasParameters || hasReturns || hasThrows) {
+                            interface += "\(indent)\n"
+                        }
+                        
+                        // Add parameter documentation
+                        if hasParameters {
+                            interface += "\(indent) - Parameters:\n"
+                            for (paramName, paramDesc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
+                                interface += "\(indent)     - \(paramName): \(paramDesc)\n"
+                            }
+                        }
+                        
+                        // Add throws documentation
+                        if let throwsInfo = documentation.throwsInfo {
+                            interface += "\(indent) - Throws: \(throwsInfo)\n"
+                        }
+                        
+                        // Add returns documentation
+                        if let returns = documentation.returns {
+                            interface += "\(indent) - Returns: \(returns)\n"
+                        }
+                        
+                        interface += "\(indent) */\n"
+                    } else {
+                        // Use /// format for single-line simple descriptions
+                        interface += "\(indent)/// \(nonEmptyLines[0].trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                    }
+                } else if needsBlockFormat {
+                    // Only parameters/returns/throws without description
+                    interface += "\(indent)/**\n"
+                    
+                    // Add parameter documentation
+                    if hasParameters {
+                        interface += "\(indent) - Parameters:\n"
+                        for (paramName, paramDesc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
+                            interface += "\(indent)     - \(paramName): \(paramDesc)\n"
+                        }
+                    }
+                    
+                    // Add throws documentation
+                    if let throwsInfo = documentation.throwsInfo {
+                        interface += "\(indent) - Throws: \(throwsInfo)\n"
+                    }
+                    
+                    // Add returns documentation
+                    if let returns = documentation.returns {
+                        interface += "\(indent) - Returns: \(returns)\n"
+                    }
+                    
+                    interface += "\(indent) */\n"
+                }
+            }
+            
+            // Generate the declaration signature
+            var declarationLine = "\(indent)\(decl.visibility) "
+            
+            if let signature = decl.signature {
+                // Handle property formatting for let/var declarations
+                if decl.type == "let" || decl.type == "var" {
+                    // Convert let/var signatures to interface-style property declarations
+                    var modifiedSignature = signature
+                    
+                    // Replace "let" with "var" and add "{ get }"
+                    if decl.type == "let" {
+                        modifiedSignature = modifiedSignature.replacingOccurrences(of: "^let ", with: "var ", options: .regularExpression)
+                        modifiedSignature += " { get }"
+                    }
+                    // For "var", add "{ get set }"
+                    else if decl.type == "var" {
+                        modifiedSignature += " { get set }"
+                    }
+                    
+                    declarationLine += modifiedSignature
+                } else {
+                    declarationLine += signature
+                }
+            } else {
+                // For container types without signatures
+                declarationLine += "\(decl.type) \(decl.name)"
+                
+                // Add inheritance/conformances if this is an extension
+                if decl.type == "extension" {
+                    // Extension names already include the type being extended
+                    declarationLine = "\(indent)\(decl.visibility) extension \(decl.name)"
+                }
+            }
+            
+            // Add opening brace for container types
+            let isContainerType = ["class", "struct", "enum", "protocol", "extension"].contains(decl.type)
+            
+            if isContainerType && decl.members != nil && !decl.members!.isEmpty {
+                declarationLine += " {"
+            }
+            
+            interface += "\(declarationLine)\n"
+            
+            // Add members for container types with proper indentation
+            if let members = decl.members, !members.isEmpty {
+                // Special handling for enums to group cases separately
+                if decl.type == "enum" {
+                    let cases = members.filter { $0.type == "case" }
+                    let nonCases = members.filter { $0.type != "case" }
+                    
+                    // Add cases section
+                    if !cases.isEmpty {
+                        interface += "\n\(indent)   // Cases\n"
+                        for member in cases {
+                            interface += "\n"
+                            addDeclaration(member, indentLevel: indentLevel + 1)
+                        }
+                    }
+                    
+                    // Add utilities section for non-case members
+                    if !nonCases.isEmpty {
+                        interface += "\n\n\(indent)   // Utilities\n"
+                        for member in nonCases {
+                            interface += "\n"
+                            addDeclaration(member, indentLevel: indentLevel + 1)
+                        }
+                    }
+                } else {
+                    // Normal handling for non-enum types
+                    for member in members {
+                        interface += "\n"
+                        addDeclaration(member, indentLevel: indentLevel + 1)
+                    }
+                }
+                
+                // Add closing brace for container types without extra space
+                if isContainerType {
+                    interface += "\n\(indent)}\n"
+                }
+            } else if isContainerType {
+                // Empty container, still need closing brace
+                interface += "\(indent)}\n"
+            }
+        }
+        
+        for (index, decl) in overviews.enumerated() {
+            addDeclaration(decl)
+            if index < overviews.count - 1 {
+                interface += "\n"
+            }
+        }
+        
+        return interface
     }
     
     private func generateMarkdownOutput(_ overviews: [DeclarationOverview]) -> String {
@@ -115,6 +311,10 @@ public class SAAE {
                         markdown += "- `\(name)`: \(desc)\n"
                     }
                     markdown += "\n"
+                }
+                
+                if let throwsInfo = documentation.throwsInfo {
+                    markdown += "**Throws:** \(throwsInfo)\n\n"
                 }
                 
                 if let returns = documentation.returns {

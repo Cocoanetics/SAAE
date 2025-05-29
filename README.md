@@ -99,7 +99,7 @@ Parses Swift source code from a file URL.
 func generate_overview(
     ast_handle: ASTHandle,
     format: OutputFormat = .json,
-    min_visibility: VisibilityLevel = .internal
+    min_visibility: SAAE.VisibilityLevel = .internal
 ) throws -> String
 ```
 Generates a structured overview of declarations in the parsed AST.

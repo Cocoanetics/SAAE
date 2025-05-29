@@ -4,15 +4,16 @@ import SwiftSyntax
 /// Visitor class that traverses the AST and extracts declaration information
 internal class DeclarationVisitor: SyntaxVisitor {
     
-    private let minVisibility: VisibilityLevel
+    private let minVisibility: SAAE.VisibilityLevel
     private(set) var declarations: [DeclarationOverview] = []
     
     // Context tracking for path generation and nesting
     private var pathComponents: [Int] = []
     private var currentIndex: Int = 0
     private var parentNames: [String] = []
+    private var parentVisibility: SAAE.VisibilityLevel = .internal
     
-    init(minVisibility: VisibilityLevel) {
+    init(minVisibility: SAAE.VisibilityLevel) {
         self.minVisibility = minVisibility
         super.init(viewMode: .sourceAccurate)
     }
@@ -70,6 +71,10 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
         return processTypeAlias(node)
+    }
+    
+    override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+        return processEnumCase(node)
     }
     
     // MARK: - Processing Methods
@@ -268,6 +273,47 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return .skipChildren
     }
     
+    private func processEnumCase(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+        // Enum cases inherit visibility from their parent enum, but can also have explicit modifiers
+        let explicitVisibility = extractVisibility(from: node)
+        let visibility = explicitVisibility != .internal ? explicitVisibility : parentVisibility
+        
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        // Enum cases can have multiple elements in a single declaration
+        // e.g., "case first, second, third"
+        for element in node.elements {
+            currentIndex += 1
+            let currentPath = generatePath()
+            
+            let name = element.name.text
+            let fullName = generateFullName(name)
+            let documentation = extractDocumentation(from: node)
+            
+            // Generate signature for cases with associated values
+            var signature = "case \(name)"
+            if let associatedValue = element.parameterClause {
+                signature += associatedValue.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if let rawValue = element.rawValue {
+                signature += " = \(rawValue.value.description.trimmingCharacters(in: .whitespacesAndNewlines))"
+            }
+            
+            let overview = DeclarationOverview(
+                path: currentPath,
+                type: "case",
+                name: name,
+                fullName: fullName,
+                signature: signature,
+                visibility: visibility.stringValue,
+                documentation: documentation
+            )
+            
+            declarations.append(overview)
+        }
+        return .skipChildren
+    }
+    
     // MARK: - Helper Methods
     
     private func processMembers<T: SyntaxProtocol>(of node: T, basePath: String, parentName: String) -> ([DeclarationOverview], [String]) {
@@ -276,6 +322,19 @@ internal class DeclarationVisitor: SyntaxVisitor {
         memberVisitor.pathComponents = pathComponents + [currentIndex]
         memberVisitor.currentIndex = 0
         memberVisitor.parentNames = parentNames + [parentName.components(separatedBy: ".").last ?? parentName]
+        
+        // Pass parent visibility for inheritance
+        if let enumDecl = node.as(EnumDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: enumDecl)
+        } else if let structDecl = node.as(StructDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: structDecl)
+        } else if let classDecl = node.as(ClassDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: classDecl)
+        } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: protocolDecl)
+        } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: extensionDecl)
+        }
         
         // Find the member block
         if let memberBlock = findMemberBlock(in: node) {
@@ -311,7 +370,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return allNames.joined(separator: ".")
     }
     
-    private func extractVisibility<T: SyntaxProtocol>(from node: T) -> VisibilityLevel {
+    private func extractVisibility<T: SyntaxProtocol>(from node: T) -> SAAE.VisibilityLevel {
         // Try to extract modifiers from different declaration types
         var modifiers: DeclModifierListSyntax?
         
@@ -421,6 +480,24 @@ internal class DeclarationVisitor: SyntaxVisitor {
         
         if let typeAnnotation = binding.typeAnnotation {
             signature += typeAnnotation.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if let initializer = binding.initializer {
+            // Try to infer type from initializer for better readability
+            let initText = initializer.value.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Handle common cases for type inference
+            if initText.starts(with: "Configuration(") {
+                signature += ": Configuration"
+            } else if initText.contains("Double(") || initText.hasSuffix(".0") {
+                signature += ": Double"
+            } else if initText.contains("Int(") || (initText.allSatisfy { $0.isNumber }) {
+                signature += ": Int"
+            } else if initText.starts(with: "\"") && initText.hasSuffix("\"") {
+                signature += ": String"
+            } else if initText == "true" || initText == "false" {
+                signature += ": Bool"
+            }
+            // For complex initializers, we could try to extract the type name
+            // from the beginning of the initializer expression
         }
         
         return signature

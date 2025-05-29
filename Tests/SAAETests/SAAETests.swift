@@ -204,6 +204,43 @@ final class SAAETests: XCTestCase {
         XCTAssertTrue(overview.contains("\"path\" : \"1.2\"")) // property
     }
     
+    func testGenerateInterfaceOverview() throws {
+        let swiftCode = """
+        /// A calculator for testing
+        public class Calculator {
+            /// Divides two numbers
+            /// - Parameter value: The divisor
+            /// - Throws: `CalculatorError.divisionByZero` if value is zero
+            /// - Returns: The result
+            public func divide(by value: Double) throws -> Double {
+                guard value != 0 else { throw CalculatorError.divisionByZero }
+                return 10.0 / value
+            }
+        }
+        
+        /// Calculator errors
+        public enum CalculatorError: Error {
+            case divisionByZero
+        }
+        """
+        
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .interface)
+        
+        XCTAssertFalse(overview.isEmpty)
+        XCTAssertTrue(overview.contains("/// A calculator for testing"))
+        XCTAssertTrue(overview.contains("public class Calculator"))
+        XCTAssertTrue(overview.contains("/**\n"))
+        XCTAssertTrue(overview.contains(" Divides two numbers"))
+        XCTAssertTrue(overview.contains(" - Parameters:\n"))
+        XCTAssertTrue(overview.contains("   - value: The divisor"))
+        XCTAssertTrue(overview.contains(" - Throws: `CalculatorError.divisionByZero` if value is zero"))
+        XCTAssertTrue(overview.contains(" - Returns: The result"))
+        XCTAssertTrue(overview.contains("public func divide(by value: Double) throws -> Double"))
+        XCTAssertTrue(overview.contains("/// Calculator errors"))
+        XCTAssertTrue(overview.contains("public enum CalculatorError"))
+    }
+    
     func testAllDeclarationTypes() throws {
         let swiftCode = """
         /// Enum declaration
@@ -250,5 +287,54 @@ final class SAAETests: XCTestCase {
         XCTAssertTrue(overview.contains("func"))
         XCTAssertTrue(overview.contains("subscript"))
         XCTAssertTrue(overview.contains("var"))
+    }
+    
+    func testBlockCommentDocumentation() throws {
+        let swiftCode = """
+        /**
+         A test class with block comment documentation
+         This class demonstrates multi-line block comments
+         - Parameter value: A test parameter
+         - Returns: A test return value
+         - Throws: An error if something goes wrong
+         */
+        public class BlockCommentTest {
+            /** Single line block comment */
+            public func singleLineMethod() -> String {
+                return "test"
+            }
+            
+            /**
+             Multi-line block comment method
+             - Parameter input: The input string
+             - Returns: The processed string
+             */
+            public func multiLineMethod(_ input: String) -> String {
+                return input.uppercased()
+            }
+        }
+        """
+        
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .interface)
+        
+        XCTAssertFalse(overview.isEmpty)
+        
+        // Check for /** */ format for multi-line descriptions and /** */ for complex
+        XCTAssertTrue(overview.contains("/**\n"))
+        XCTAssertTrue(overview.contains(" A test class with block comment documentation"))
+        XCTAssertTrue(overview.contains(" This class demonstrates multi-line block comments"))
+        XCTAssertTrue(overview.contains("/// Single line block comment"))
+        XCTAssertTrue(overview.contains(" Multi-line block comment method"))
+        XCTAssertTrue(overview.contains(" - Parameters:\n"))
+        XCTAssertTrue(overview.contains("   - input: The input string"))
+        XCTAssertTrue(overview.contains(" - Returns: The processed string"))
+        XCTAssertTrue(overview.contains(" */"))
+        
+        // Ensure we're using /// for simple comments now
+        XCTAssertTrue(overview.contains("///"))
+        
+        // Ensure no input-style comment artifacts remain
+        XCTAssertFalse(overview.contains(" * "))
     }
 } 

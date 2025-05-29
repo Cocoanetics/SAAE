@@ -5,4 +5,5 @@ public enum OutputFormat {
     case json
     case yaml
     case markdown
+    case interface
 } 

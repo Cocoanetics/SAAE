@@ -25,14 +25,14 @@ public func parse(string: String) throws -> ASTHandle {
 /// Generate an overview of declarations in the parsed AST
 /// - Parameters:
 ///   - astHandle: The AST handle obtained from a parse operation
-///   - format: Output format (.json, .yaml, .markdown)
+///   - format: Output format (.json, .yaml, .markdown, .interface)
 ///   - minVisibility: Minimum visibility level to include
 /// - Returns: String containing the generated overview
 /// - Throws: SAAEError if AST handle is invalid
 public func generateOverview(
     astHandle: ASTHandle,
     format: OutputFormat = .json,
-    minVisibility: VisibilityLevel = .internal
+	minVisibility: SAAE.VisibilityLevel = .internal
 ) throws -> String {
     return try sharedSAAE.generateOverview(
         astHandle: astHandle,

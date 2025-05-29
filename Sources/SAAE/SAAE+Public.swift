@@ -39,4 +39,23 @@ public func generateOverview(
         format: format,
         minVisibility: minVisibility
     )
+}
+
+/// Generate an overview of declarations in multiple parsed ASTs
+/// - Parameters:
+///   - astHandlesWithPaths: Array of tuples containing AST handles and their file paths
+///   - format: Output format (.json, .yaml, .markdown, .interface)
+///   - minVisibility: Minimum visibility level to include
+/// - Returns: String containing the generated overview
+/// - Throws: SAAEError if any AST handle is invalid
+public func generateMultiFileOverview(
+    astHandlesWithPaths: [(handle: ASTHandle, path: String)],
+    format: OutputFormat = .json,
+	minVisibility: SAAE.VisibilityLevel = .internal
+) throws -> String {
+    return try sharedSAAE.generateMultiFileOverview(
+        astHandlesWithPaths: astHandlesWithPaths,
+        format: format,
+        minVisibility: minVisibility
+    )
 } 

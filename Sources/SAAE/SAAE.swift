@@ -81,6 +81,57 @@ public class SAAE {
         }
     }
     
+    /// Generate an overview of declarations in multiple parsed ASTs
+    /// - Parameters:
+    ///   - astHandlesWithPaths: Array of tuples containing AST handles and their file paths
+    ///   - format: Output format (.json, .yaml, .markdown, .interface)
+    ///   - minVisibility: Minimum visibility level to include
+    /// - Returns: String containing the generated overview
+    /// - Throws: SAAEError if any AST handle is invalid
+    public func generateMultiFileOverview(
+        astHandlesWithPaths: [(handle: ASTHandle, path: String)],
+        format: OutputFormat = .json,
+        minVisibility: SAAE.VisibilityLevel = .internal
+    ) throws -> String {
+        var fileOverviews: [FileOverview] = []
+        
+        for (handle, filePath) in astHandlesWithPaths {
+            guard let sourceFile = astStorage[handle.id] else {
+                throw SAAEError.invalidASTHandle
+            }
+            
+            // Collect imports
+            let importVisitor = ImportVisitor()
+            importVisitor.walk(sourceFile)
+            let imports = importVisitor.imports
+            
+            // Collect declarations
+            let visitor = DeclarationVisitor(minVisibility: minVisibility)
+            visitor.walk(sourceFile)
+            let declarations = visitor.declarations
+            
+            let fileOverview = FileOverview(
+                path: filePath,
+                imports: imports.sorted(),
+                declarations: declarations
+            )
+            fileOverviews.append(fileOverview)
+        }
+        
+        switch format {
+        case .json:
+            let multiFileOverview = MultiFileCodeOverview(files: fileOverviews)
+            return try generateMultiFileJSONOutput(multiFileOverview)
+        case .yaml:
+            let multiFileOverview = MultiFileCodeOverview(files: fileOverviews)
+            return try generateMultiFileYAMLOutput(multiFileOverview)
+        case .markdown:
+            return generateMultiFileMarkdownOutput(fileOverviews)
+        case .interface:
+            return generateMultiFileInterfaceOutput(fileOverviews)
+        }
+    }
+    
     // MARK: - Private Output Generation Methods
     
     private func generateJSONOutput(_ codeOverview: CodeOverview) throws -> String {
@@ -93,6 +144,145 @@ public class SAAE {
     private func generateYAMLOutput(_ codeOverview: CodeOverview) throws -> String {
         let encoder = YAMLEncoder()
         return try encoder.encode(codeOverview)
+    }
+    
+    private func generateMultiFileJSONOutput(_ multiFileOverview: MultiFileCodeOverview) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(multiFileOverview)
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+    
+    private func generateMultiFileYAMLOutput(_ multiFileOverview: MultiFileCodeOverview) throws -> String {
+        let encoder = YAMLEncoder()
+        return try encoder.encode(multiFileOverview)
+    }
+    
+    private func generateMultiFileMarkdownOutput(_ fileOverviews: [FileOverview]) -> String {
+        var markdown = "# Multi-File Code Overview\n\n"
+        
+        // Add overview of all files
+        markdown += "## Files\n\n"
+        for (index, fileOverview) in fileOverviews.enumerated() {
+            markdown += "\(index + 1). [`\(fileOverview.path)`](#file-\(index + 1))\n"
+        }
+        markdown += "\n---\n\n"
+        
+        // Add detailed analysis for each file
+        for (index, fileOverview) in fileOverviews.enumerated() {
+            markdown += "## File \(index + 1): `\(fileOverview.path)`\n\n"
+            
+            // Add imports if any
+            if !fileOverview.imports.isEmpty {
+                markdown += "### Imports\n\n"
+                for importName in fileOverview.imports {
+                    markdown += "- `import \(importName)`\n"
+                }
+                markdown += "\n"
+            }
+            
+            // Add declarations
+            if !fileOverview.declarations.isEmpty {
+                markdown += "### Declarations\n\n"
+                
+                func addDeclaration(_ decl: DeclarationOverview, level: Int = 4) {
+                    let heading = String(repeating: "#", count: level)
+                    let title = decl.fullName ?? decl.name
+                    markdown += "\(heading) \(decl.type.capitalized): \(title)\n\n"
+                    
+                    markdown += "**Path:** `\(decl.path)`  \n"
+                    markdown += "**Visibility:** `\(decl.visibility)`  \n"
+                    
+                    if let attributes = decl.attributes, !attributes.isEmpty {
+                        markdown += "**Attributes:** `\(attributes.joined(separator: " "))`  \n"
+                    }
+                    
+                    if let signature = decl.signature {
+                        markdown += "**Signature:** `\(signature)`  \n"
+                    }
+                    
+                    markdown += "\n"
+                    
+                    if let documentation = decl.documentation {
+                        if !documentation.description.isEmpty {
+                            markdown += "\(documentation.description)\n\n"
+                        }
+                        
+                        if !documentation.parameters.isEmpty {
+                            markdown += "**Parameters:**\n"
+                            for (name, desc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
+                                markdown += "- `\(name)`: \(desc)\n"
+                            }
+                            markdown += "\n"
+                        }
+                        
+                        if let throwsInfo = documentation.throwsInfo {
+                            markdown += "**Throws:** \(throwsInfo)\n\n"
+                        }
+                        
+                        if let returns = documentation.returns {
+                            markdown += "**Returns:** \(returns)\n\n"
+                        }
+                    }
+                    
+                    if let members = decl.members, !members.isEmpty {
+                        markdown += "**Children:**\n"
+                        for member in members {
+                            let memberTitle = member.fullName ?? member.name
+                            markdown += "- `\(member.path)` - \(member.type.capitalized): **\(memberTitle)**\n"
+                        }
+                        markdown += "\n"
+                    }
+                    
+                    markdown += "---\n\n"
+                }
+                
+                func processDeclarations(_ declarations: [DeclarationOverview]) {
+                    for decl in declarations {
+                        addDeclaration(decl)
+                        if let members = decl.members {
+                            processDeclarations(members)
+                        }
+                    }
+                }
+                
+                processDeclarations(fileOverview.declarations)
+            }
+            
+            if index < fileOverviews.count - 1 {
+                markdown += "\n" + String(repeating: "=", count: 80) + "\n\n"
+            }
+        }
+        
+        return markdown
+    }
+    
+    private func generateMultiFileInterfaceOutput(_ fileOverviews: [FileOverview]) -> String {
+        var interface = ""
+        
+        for (index, fileOverview) in fileOverviews.enumerated() {
+            interface += "// File: \(fileOverview.path)\n"
+            interface += String(repeating: "=", count: fileOverview.path.count + 8) + "\n\n"
+            
+            // Add imports
+            for importName in fileOverview.imports.sorted() {
+                interface += "import \(importName)\n"
+            }
+            
+            if !fileOverview.imports.isEmpty {
+                interface += "\n"
+            }
+            
+            // Use the existing generateInterfaceOutput logic but for single file
+            let fileInterface = generateInterfaceOutput(fileOverview.declarations, imports: [])
+            interface += fileInterface
+            
+            if index < fileOverviews.count - 1 {
+                interface += "\n\n" + String(repeating: "-", count: 50) + "\n\n"
+            }
+        }
+        
+        return interface
     }
     
     private func generateInterfaceOutput(_ overviews: [DeclarationOverview], imports: [String]) -> String {

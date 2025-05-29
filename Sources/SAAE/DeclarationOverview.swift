@@ -11,6 +11,28 @@ internal struct CodeOverview: Codable {
     }
 }
 
+/// Represents a single file's overview with its path for multi-file output
+internal struct FileOverview: Codable {
+    internal let path: String
+    internal let imports: [String]
+    internal let declarations: [DeclarationOverview]
+    
+    internal init(path: String, imports: [String], declarations: [DeclarationOverview]) {
+        self.path = path
+        self.imports = imports
+        self.declarations = declarations
+    }
+}
+
+/// Represents the overview of multiple Swift files
+internal struct MultiFileCodeOverview: Codable {
+    internal let files: [FileOverview]
+    
+    internal init(files: [FileOverview]) {
+        self.files = files
+    }
+}
+
 /// Represents a declaration in the overview
 internal struct DeclarationOverview: Codable {
     internal let path: String

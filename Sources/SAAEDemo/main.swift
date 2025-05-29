@@ -113,23 +113,46 @@ func processFiles(_ fileURLs: [URL], format: OutputFormat, minVisibility: SAAE.V
         print("🔒 Minimum visibility: \(minVisibility.stringValue)")
         print("")
         
-        for (index, fileURL) in relevantFiles.enumerated() {
-            let fullPath = fileURL.path
-            print("[\(index + 1)/\(relevantFiles.count)] 📄 \(fullPath)")
-            print("=" + String(repeating: "=", count: fullPath.count + 6))
-            
+        // For JSON and YAML formats, use the multi-file API for proper structure
+        if format == .json || format == .yaml {
             do {
-                let handle = try parse(url: fileURL)
-                let output = try generateOverview(astHandle: handle, format: format, minVisibility: minVisibility)
+                var astHandlesWithPaths: [(handle: ASTHandle, path: String)] = []
+                
+                for fileURL in relevantFiles {
+                    let handle = try parse(url: fileURL)
+                    astHandlesWithPaths.append((handle: handle, path: fileURL.path))
+                }
+                
+                let output = try generateMultiFileOverview(
+                    astHandlesWithPaths: astHandlesWithPaths,
+                    format: format,
+                    minVisibility: minVisibility
+                )
                 print(output)
                 
-                if index < relevantFiles.count - 1 {
-                    print("\n" + String(repeating: "-", count: 50) + "\n")
-                }
             } catch {
-                print("❌ Error: \(error)")
-                if index < relevantFiles.count - 1 {
-                    print("\n" + String(repeating: "-", count: 50) + "\n")
+                print("❌ Error processing multiple files: \(error)")
+            }
+        } else {
+            // For Markdown and Interface formats, use individual file processing
+            for (index, fileURL) in relevantFiles.enumerated() {
+                let fullPath = fileURL.path
+                print("[\(index + 1)/\(relevantFiles.count)] 📄 \(fullPath)")
+                print("=" + String(repeating: "=", count: fullPath.count + 6))
+                
+                do {
+                    let handle = try parse(url: fileURL)
+                    let output = try generateOverview(astHandle: handle, format: format, minVisibility: minVisibility)
+                    print(output)
+                    
+                    if index < relevantFiles.count - 1 {
+                        print("\n" + String(repeating: "-", count: 50) + "\n")
+                    }
+                } catch {
+                    print("❌ Error: \(error)")
+                    if index < relevantFiles.count - 1 {
+                        print("\n" + String(repeating: "-", count: 50) + "\n")
+                    }
                 }
             }
         }

@@ -67,14 +67,15 @@ public class SAAE {
         visitor.walk(sourceFile)
         
         let overviews = visitor.declarations
+        let codeOverview = CodeOverview(imports: imports.sorted(), declarations: overviews)
         
         switch format {
         case .json:
-            return try generateJSONOutput(overviews)
+            return try generateJSONOutput(codeOverview)
         case .yaml:
-            return try generateYAMLOutput(overviews)
+            return try generateYAMLOutput(codeOverview)
         case .markdown:
-            return generateMarkdownOutput(overviews)
+            return generateMarkdownOutput(codeOverview)
         case .interface:
             return generateInterfaceOutput(overviews, imports: imports)
         }
@@ -82,16 +83,16 @@ public class SAAE {
     
     // MARK: - Private Output Generation Methods
     
-    private func generateJSONOutput(_ overviews: [DeclarationOverview]) throws -> String {
+    private func generateJSONOutput(_ codeOverview: CodeOverview) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(overviews)
+        let data = try encoder.encode(codeOverview)
         return String(data: data, encoding: .utf8) ?? ""
     }
     
-    private func generateYAMLOutput(_ overviews: [DeclarationOverview]) throws -> String {
+    private func generateYAMLOutput(_ codeOverview: CodeOverview) throws -> String {
         let encoder = YAMLEncoder()
-        return try encoder.encode(overviews)
+        return try encoder.encode(codeOverview)
     }
     
     private func generateInterfaceOutput(_ overviews: [DeclarationOverview], imports: [String]) -> String {
@@ -283,8 +284,17 @@ public class SAAE {
         return interface
     }
     
-    private func generateMarkdownOutput(_ overviews: [DeclarationOverview]) -> String {
+    private func generateMarkdownOutput(_ codeOverview: CodeOverview) -> String {
         var markdown = "# Code Overview\n\n"
+        
+        // Add imports section if there are any imports
+        if !codeOverview.imports.isEmpty {
+            markdown += "## Imports\n\n"
+            for importName in codeOverview.imports {
+                markdown += "- `import \(importName)`\n"
+            }
+            markdown += "\n---\n\n"
+        }
         
         func addDeclaration(_ decl: DeclarationOverview, level: Int = 2) {
             let heading = String(repeating: "#", count: level)
@@ -344,7 +354,7 @@ public class SAAE {
             }
         }
         
-        processDeclarations(overviews)
+        processDeclarations(codeOverview.declarations)
         return markdown
     }
 } 

@@ -1,5 +1,16 @@
 import Foundation
 
+/// Represents the complete overview of a Swift file including imports and declarations
+public struct CodeOverview: Codable {
+    public let imports: [String]
+    public let declarations: [DeclarationOverview]
+    
+    public init(imports: [String], declarations: [DeclarationOverview]) {
+        self.imports = imports
+        self.declarations = declarations
+    }
+}
+
 /// Represents a declaration in the overview
 public struct DeclarationOverview: Codable {
     public let path: String

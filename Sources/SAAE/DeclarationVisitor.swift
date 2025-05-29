@@ -185,7 +185,9 @@ internal class DeclarationVisitor: SyntaxVisitor {
     }
     
     override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
-        let visibility = extractVisibility(from: node)
+        // Enum cases don't have their own access modifiers - they inherit from their parent enum
+        // Use parentVisibility instead of extracting from the case node
+        let visibility = parentVisibility
         guard visibility >= minVisibility else { return .skipChildren }
         
         let attributes = extractAttributes(from: node)

@@ -387,7 +387,14 @@ public class SAAE {
             }
             
             // Generate the declaration signature
-            var declarationLine = "\(indent)\(decl.visibility) "
+            var declarationLine: String
+            
+            // Enum cases don't show their visibility (they inherit from parent enum)
+            if decl.type == "case" {
+                declarationLine = "\(indent)"
+            } else {
+                declarationLine = "\(indent)\(decl.visibility) "
+            }
             
             if let signature = decl.signature {
                 // Handle property formatting for let/var declarations
@@ -406,17 +413,24 @@ public class SAAE {
                     }
                     
                     declarationLine += modifiedSignature
+                } else if decl.type == "case" {
+                    // For enum cases, show "case" keyword but omit visibility modifier
+                    declarationLine += "case \(signature)"
                 } else {
                     declarationLine += signature
                 }
             } else {
                 // For container types without signatures
-                declarationLine += "\(decl.type) \(decl.name)"
-                
-                // Add inheritance/conformances if this is an extension
-                if decl.type == "extension" {
-                    // Extension names already include the type being extended
-                    declarationLine = "\(indent)\(decl.visibility) extension \(decl.name)"
+                if decl.type == "case" {
+                    declarationLine += "case \(decl.name)"
+                } else {
+                    declarationLine += "\(decl.type) \(decl.name)"
+                    
+                    // Add inheritance/conformances if this is an extension
+                    if decl.type == "extension" {
+                        // Extension names already include the type being extended
+                        declarationLine = "\(indent)\(decl.visibility) extension \(decl.name)"
+                    }
                 }
             }
             

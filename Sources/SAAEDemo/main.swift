@@ -36,15 +36,15 @@ public enum CalculatorError: Error {
 
 do {
     print("Parsing Swift code...")
-    let handle = try parse(from_string: exampleCode)
+    let handle = try parse(string: exampleCode)
     
     print("✅ Code parsed successfully!")
     print("\n📄 Generating JSON overview...")
-    let jsonOverview = try generate_overview(ast_handle: handle, format: .json)
+    let jsonOverview = try generateOverview(astHandle: handle, format: .json)
     print(jsonOverview)
     
     print("\n📝 Generating Markdown overview...")
-    let markdownOverview = try generate_overview(ast_handle: handle, format: .markdown)
+    let markdownOverview = try generateOverview(astHandle: handle, format: .markdown)
     print(markdownOverview)
     
 } catch {

@@ -3,42 +3,6 @@ import SwiftSyntax
 import SwiftParser
 import Yams
 
-/// Errors that can occur during SAAE operations
-public enum SAAEError: Error, LocalizedError, Equatable {
-    case fileNotFound(URL)
-    case fileReadError(URL, Error)
-    case parseError(String)
-    case invalidASTHandle
-    
-    public var errorDescription: String? {
-        switch self {
-        case .fileNotFound(let url):
-            return "File not found at \(url.path)"
-        case .fileReadError(let url, let error):
-            return "Failed to read file at \(url.path): \(error.localizedDescription)"
-        case .parseError(let message):
-            return "Parse error: \(message)"
-        case .invalidASTHandle:
-            return "Invalid AST handle"
-        }
-    }
-    
-    public static func == (lhs: SAAEError, rhs: SAAEError) -> Bool {
-        switch (lhs, rhs) {
-        case (.fileNotFound(let lUrl), .fileNotFound(let rUrl)):
-            return lUrl == rUrl
-        case (.fileReadError(let lUrl, _), .fileReadError(let rUrl, _)):
-            return lUrl == rUrl
-        case (.parseError(let lMessage), .parseError(let rMessage)):
-            return lMessage == rMessage
-        case (.invalidASTHandle, .invalidASTHandle):
-            return true
-        default:
-            return false
-        }
-    }
-}
-
 /// Main SAAE class for parsing Swift code and generating overviews
 public class SAAE {
     
@@ -48,30 +12,30 @@ public class SAAE {
     public init() {}
     
     /// Parse Swift code from a file URL
-    /// - Parameter fileURL: URL pointing to a local Swift source file
+    /// - Parameter url: URL pointing to a local Swift source file
     /// - Returns: AST handle for the parsed code
     /// - Throws: SAAEError if file cannot be read or parsed
-    public func parse(from_url fileURL: URL) throws -> ASTHandle {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw SAAEError.fileNotFound(fileURL)
+    public func parse(url: URL) throws -> ASTHandle {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw SAAEError.fileNotFound(url)
         }
         
         let codeString: String
         do {
-            codeString = try String(contentsOf: fileURL, encoding: .utf8)
+            codeString = try String(contentsOf: url, encoding: .utf8)
         } catch {
-            throw SAAEError.fileReadError(fileURL, error)
+            throw SAAEError.fileReadError(url, error)
         }
         
-        return try parse(from_string: codeString)
+        return try parse(string: codeString)
     }
     
     /// Parse Swift code from a string
-    /// - Parameter codeString: String containing Swift source code
+    /// - Parameter string: String containing Swift source code
     /// - Returns: AST handle for the parsed code
     /// - Throws: SAAEError if code cannot be parsed
-    public func parse(from_string codeString: String) throws -> ASTHandle {
-        let sourceFile = Parser.parse(source: codeString)
+    public func parse(string: String) throws -> ASTHandle {
+        let sourceFile = Parser.parse(source: string)
         
         let handle = ASTHandle()
         astStorage[handle.id] = sourceFile
@@ -80,21 +44,21 @@ public class SAAE {
     
     /// Generate an overview of declarations in the parsed AST
     /// - Parameters:
-    ///   - ast_handle: The AST handle obtained from a parse operation
+    ///   - astHandle: The AST handle obtained from a parse operation
     ///   - format: Output format (.json, .yaml, .markdown)
-    ///   - min_visibility: Minimum visibility level to include
+    ///   - minVisibility: Minimum visibility level to include
     /// - Returns: String containing the generated overview
     /// - Throws: SAAEError if AST handle is invalid
-    public func generate_overview(
-        ast_handle: ASTHandle,
+    public func generateOverview(
+        astHandle: ASTHandle,
         format: OutputFormat = .json,
-        min_visibility: VisibilityLevel = .internal
+        minVisibility: VisibilityLevel = .internal
     ) throws -> String {
-        guard let sourceFile = astStorage[ast_handle.id] else {
+        guard let sourceFile = astStorage[astHandle.id] else {
             throw SAAEError.invalidASTHandle
         }
         
-        let visitor = DeclarationVisitor(minVisibility: min_visibility)
+        let visitor = DeclarationVisitor(minVisibility: minVisibility)
         visitor.walk(sourceFile)
         
         let overviews = visitor.declarations

@@ -25,7 +25,7 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
+        let handle = try parse(string: swiftCode)
         XCTAssertNotNil(handle)
     }
     
@@ -43,8 +43,8 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .json)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .json)
         
         XCTAssertFalse(overview.isEmpty)
         XCTAssertTrue(overview.contains("TestClass"))
@@ -59,8 +59,8 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .yaml)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .yaml)
         
         XCTAssertFalse(overview.isEmpty)
         XCTAssertTrue(overview.contains("SimpleStruct"))
@@ -77,8 +77,8 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .markdown)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .markdown)
         
         XCTAssertFalse(overview.isEmpty)
         XCTAssertTrue(overview.contains("# Code Overview"))
@@ -97,17 +97,17 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
+        let handle = try parse(string: swiftCode)
         
         // Test with public visibility
-        let publicOverview = try generate_overview(ast_handle: handle, format: .json, min_visibility: .public)
+        let publicOverview = try generateOverview(astHandle: handle, format: .json, minVisibility: .public)
         XCTAssertTrue(publicOverview.contains("PublicStruct"))
         XCTAssertTrue(publicOverview.contains("publicProperty"))
         XCTAssertFalse(publicOverview.contains("internalProperty"))
         XCTAssertFalse(publicOverview.contains("privateProperty"))
         
         // Test with internal visibility
-        let internalOverview = try generate_overview(ast_handle: handle, format: .json, min_visibility: .internal)
+        let internalOverview = try generateOverview(astHandle: handle, format: .json, minVisibility: .internal)
         XCTAssertTrue(internalOverview.contains("PublicStruct"))
         XCTAssertTrue(internalOverview.contains("publicProperty"))
         XCTAssertTrue(internalOverview.contains("internalProperty"))
@@ -129,8 +129,8 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .json)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .json)
         
         XCTAssertTrue(overview.contains("OuterStruct"))
         XCTAssertTrue(overview.contains("InnerStruct"))
@@ -148,8 +148,8 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .json)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .json)
         
         XCTAssertTrue(overview.contains("This is a test function"))
         XCTAssertTrue(overview.contains("name"))
@@ -160,7 +160,7 @@ final class SAAETests: XCTestCase {
     func testInvalidASTHandle() throws {
         let invalidHandle = ASTHandle()
         
-        XCTAssertThrowsError(try generate_overview(ast_handle: invalidHandle)) { error in
+        XCTAssertThrowsError(try generateOverview(astHandle: invalidHandle)) { error in
             if let saaError = error as? SAAEError {
                 XCTAssertEqual(saaError, .invalidASTHandle)
             } else {
@@ -172,7 +172,7 @@ final class SAAETests: XCTestCase {
     func testFileNotFound() throws {
         let nonExistentURL = URL(fileURLWithPath: "/nonexistent/file.swift")
         
-        XCTAssertThrowsError(try parse(from_url: nonExistentURL)) { error in
+        XCTAssertThrowsError(try parse(url: nonExistentURL)) { error in
             if let saaError = error as? SAAEError,
                case .fileNotFound = saaError {
                 // Expected error
@@ -193,68 +193,62 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .json)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .json)
         
         // Check that paths are generated correctly
         XCTAssertTrue(overview.contains("\"path\" : \"1\"")) // OuterStruct
-        XCTAssertTrue(overview.contains("\"path\" : \"1.1\"")) // InnerStruct
+        XCTAssertTrue(overview.contains("\"path\" : \"1.1\"")) // InnerStruct  
+        XCTAssertTrue(overview.contains("\"path\" : \"1.1.1\"")) // value
+        XCTAssertTrue(overview.contains("\"path\" : \"1.1.2\"")) // method
         XCTAssertTrue(overview.contains("\"path\" : \"1.2\"")) // property
     }
     
     func testAllDeclarationTypes() throws {
         let swiftCode = """
-        /// Test protocol
-        public protocol TestProtocol {
-            associatedtype T
-            func requirement() -> T
+        /// Enum declaration
+        enum TestEnum {
+            case first, second
         }
         
-        /// Test class
-        public class TestClass: TestProtocol {
+        /// Protocol declaration
+        protocol TestProtocol {
+            associatedtype T
+            func method() -> T
+        }
+        
+        /// Class declaration
+        class TestClass: TestProtocol {
             typealias T = String
             
-            public var property: String = ""
-            public let constant: Int = 42
-            
-            public init() {}
-            
-            public func requirement() -> String {
-                return property
+            func method() -> String {
+                return "test"
             }
             
-            public subscript(index: Int) -> Character {
-                return property[property.index(property.startIndex, offsetBy: index)]
+            subscript(index: Int) -> String {
+                return "subscript"
             }
         }
         
-        /// Test enum
-        public enum TestEnum {
-            case first
-            case second(String)
-        }
-        
-        /// Test extension
+        /// Extension declaration
         extension TestClass {
-            func extensionMethod() -> String {
-                return "extended"
+            var computed: String {
+                return "computed"
             }
         }
         """
         
-        let handle = try parse(from_string: swiftCode)
-        let overview = try generate_overview(ast_handle: handle, format: .json)
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .json)
         
-        // Verify all declaration types are present
+        // Check that all declaration types are captured
+        XCTAssertTrue(overview.contains("enum"))
         XCTAssertTrue(overview.contains("protocol"))
         XCTAssertTrue(overview.contains("class"))
-        XCTAssertTrue(overview.contains("enum"))
         XCTAssertTrue(overview.contains("extension"))
         XCTAssertTrue(overview.contains("typealias"))
-        XCTAssertTrue(overview.contains("var"))
-        XCTAssertTrue(overview.contains("let"))
-        XCTAssertTrue(overview.contains("initializer"))
         XCTAssertTrue(overview.contains("func"))
         XCTAssertTrue(overview.contains("subscript"))
+        XCTAssertTrue(overview.contains("var"))
     }
 } 

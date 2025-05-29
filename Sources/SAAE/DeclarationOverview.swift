@@ -10,7 +10,6 @@ public struct DeclarationOverview: Codable {
     public let visibility: String
     public let documentation: Documentation?
     public let members: [DeclarationOverview]?
-    public let childPaths: [String]?
     
     public init(
         path: String,
@@ -20,8 +19,7 @@ public struct DeclarationOverview: Codable {
         signature: String? = nil,
         visibility: String,
         documentation: Documentation? = nil,
-        members: [DeclarationOverview]? = nil,
-        childPaths: [String]? = nil
+        members: [DeclarationOverview]? = nil
     ) {
         self.path = path
         self.type = type
@@ -31,6 +29,5 @@ public struct DeclarationOverview: Codable {
         self.visibility = visibility
         self.documentation = documentation
         self.members = members
-        self.childPaths = childPaths
     }
 } 

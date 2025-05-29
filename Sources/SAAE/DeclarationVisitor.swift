@@ -91,7 +91,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let documentation = extractDocumentation(from: node)
         
         // Process members if this is a container type
-        let (members, childPaths) = processMembers(of: node, basePath: currentPath, parentName: fullName)
+        let members = processMembers(of: node, basePath: currentPath, parentName: fullName)
         
         let overview = DeclarationOverview(
             path: currentPath,
@@ -101,8 +101,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             signature: nil, // Container types don't have signatures in this implementation
             visibility: visibility.stringValue,
             documentation: documentation,
-            members: members.isEmpty ? nil : members,
-            childPaths: childPaths.isEmpty ? nil : childPaths
+            members: members.isEmpty ? nil : members
         )
         
         declarations.append(overview)
@@ -121,7 +120,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let documentation = extractDocumentation(from: node)
         
         // Process members of the extension
-        let (members, childPaths) = processMembers(of: node, basePath: currentPath, parentName: fullName)
+        let members = processMembers(of: node, basePath: currentPath, parentName: fullName)
         
         let overview = DeclarationOverview(
             path: currentPath,
@@ -131,8 +130,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             signature: nil,
             visibility: visibility.stringValue,
             documentation: documentation,
-            members: members.isEmpty ? nil : members,
-            childPaths: childPaths.isEmpty ? nil : childPaths
+            members: members.isEmpty ? nil : members
         )
         
         declarations.append(overview)
@@ -316,7 +314,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     // MARK: - Helper Methods
     
-    private func processMembers<T: SyntaxProtocol>(of node: T, basePath: String, parentName: String) -> ([DeclarationOverview], [String]) {
+    private func processMembers<T: SyntaxProtocol>(of node: T, basePath: String, parentName: String) -> [DeclarationOverview] {
         // Create a new visitor for members
         let memberVisitor = DeclarationVisitor(minVisibility: minVisibility)
         memberVisitor.pathComponents = pathComponents + [currentIndex]
@@ -341,8 +339,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             memberVisitor.walk(memberBlock)
         }
         
-        let childPaths = memberVisitor.declarations.map { $0.path }
-        return (memberVisitor.declarations, childPaths)
+        return memberVisitor.declarations
     }
     
     private func findMemberBlock<T: SyntaxProtocol>(in node: T) -> SyntaxProtocol? {

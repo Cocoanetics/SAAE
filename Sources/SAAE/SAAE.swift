@@ -322,10 +322,12 @@ public class SAAE {
                 }
             }
             
-            if let childPaths = decl.childPaths, !childPaths.isEmpty {
+            // Enhanced children references with type and name information
+            if let members = decl.members, !members.isEmpty {
                 markdown += "**Children:**\n"
-                for childPath in childPaths {
-                    markdown += "- Path: `\(childPath)`\n"
+                for member in members {
+                    let memberTitle = member.fullName ?? member.name
+                    markdown += "- `\(member.path)` - \(member.type.capitalized): **\(memberTitle)**\n"
                 }
                 markdown += "\n"
             }

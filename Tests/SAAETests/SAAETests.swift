@@ -137,6 +137,50 @@ final class SAAETests: XCTestCase {
         XCTAssertTrue(overview.contains("members"))
     }
     
+    func testEnhancedMarkdownChildrenReferences() throws {
+        let swiftCode = """
+        /// Main calculator class
+        public class Calculator {
+            /// Precision setting
+            public var precision: Int = 2
+            
+            /// Configuration struct
+            public struct Config {
+                /// Whether to round results
+                public var shouldRound: Bool = true
+                
+                /// Maximum decimal places
+                public let maxDecimals: Int = 10
+            }
+            
+            /// Performs division
+            /// - Parameter value: The divisor
+            /// - Returns: The result
+            public func divide(by value: Double) throws -> Double {
+                return 10.0 / value
+            }
+        }
+        """
+        
+        let handle = try parse(string: swiftCode)
+        let overview = try generateOverview(astHandle: handle, format: .markdown)
+        
+        XCTAssertFalse(overview.isEmpty)
+        
+        // Check that children references include type and name information
+        XCTAssertTrue(overview.contains("**Children:**"))
+        XCTAssertTrue(overview.contains("- `1.1` - Var: **Calculator.precision**"))
+        XCTAssertTrue(overview.contains("- `1.2` - Struct: **Calculator.Config**"))
+        XCTAssertTrue(overview.contains("- `1.3` - Func: **Calculator.divide**"))
+        
+        // Check nested structure children
+        XCTAssertTrue(overview.contains("- `1.2.1` - Var: **Calculator.Config.shouldRound**"))
+        XCTAssertTrue(overview.contains("- `1.2.2` - Let: **Calculator.Config.maxDecimals**"))
+        
+        // Ensure the old path-only format is no longer used
+        XCTAssertFalse(overview.contains("- Path: `1.1`"))
+    }
+    
     func testDocumentationParsing() throws {
         let swiftCode = """
         /// This is a test function

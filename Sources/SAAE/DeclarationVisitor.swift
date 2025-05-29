@@ -439,11 +439,13 @@ internal class DeclarationVisitor: SyntaxVisitor {
         
         // Generic parameters
         if let genericParams = node.genericParameterClause {
-            signature += genericParams.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(genericParams.description)
+            signature += normalized
         }
         
         // Parameters
-        signature += node.signature.parameterClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = normalizeWhitespace(node.signature.parameterClause.description)
+        signature += params
         
         // Async/throws
         if let effectSpecifiers = node.signature.effectSpecifiers {
@@ -457,15 +459,25 @@ internal class DeclarationVisitor: SyntaxVisitor {
         
         // Return type
         if let returnClause = node.signature.returnClause {
-            signature += " " + returnClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(returnClause.description)
+            signature += " " + normalized
         }
         
         // Generic where clause
         if let whereClause = node.genericWhereClause {
-            signature += " " + whereClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(whereClause.description)
+            signature += " " + normalized
         }
         
         return signature
+    }
+    
+    /// Normalizes whitespace in a string to single-line format
+    private func normalizeWhitespace(_ text: String) -> String {
+        return text
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
     
     private func generateVariableSignature(_ binding: PatternBindingSyntax, isLet: Bool) -> String {
@@ -476,7 +488,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
         }
         
         if let typeAnnotation = binding.typeAnnotation {
-            signature += typeAnnotation.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(typeAnnotation.description)
+            signature += normalized
         } else if let initializer = binding.initializer {
             // Try to infer type from initializer for better readability
             let initText = initializer.value.description.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -504,10 +517,12 @@ internal class DeclarationVisitor: SyntaxVisitor {
         var signature = "init"
         
         if let genericParams = node.genericParameterClause {
-            signature += genericParams.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(genericParams.description)
+            signature += normalized
         }
         
-        signature += node.signature.parameterClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = normalizeWhitespace(node.signature.parameterClause.description)
+        signature += params
         
         if let effectSpecifiers = node.signature.effectSpecifiers {
             if effectSpecifiers.asyncSpecifier != nil {
@@ -519,7 +534,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
         }
         
         if let whereClause = node.genericWhereClause {
-            signature += " " + whereClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(whereClause.description)
+            signature += " " + normalized
         }
         
         return signature
@@ -529,16 +545,20 @@ internal class DeclarationVisitor: SyntaxVisitor {
         var signature = "subscript"
         
         if let genericParams = node.genericParameterClause {
-            signature += genericParams.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(genericParams.description)
+            signature += normalized
         }
         
-        signature += node.parameterClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let params = normalizeWhitespace(node.parameterClause.description)
+        signature += params
         
         // returnClause is not optional in SubscriptDeclSyntax
-        signature += " " + node.returnClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let returnType = normalizeWhitespace(node.returnClause.description)
+        signature += " " + returnType
         
         if let whereClause = node.genericWhereClause {
-            signature += " " + whereClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(whereClause.description)
+            signature += " " + normalized
         }
         
         return signature
@@ -548,13 +568,16 @@ internal class DeclarationVisitor: SyntaxVisitor {
         var signature = "typealias \(node.name.text)"
         
         if let genericParams = node.genericParameterClause {
-            signature += genericParams.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(genericParams.description)
+            signature += normalized
         }
         
-        signature += " = " + node.initializer.value.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let initializer = normalizeWhitespace(node.initializer.value.description)
+        signature += " = " + initializer
         
         if let whereClause = node.genericWhereClause {
-            signature += " " + whereClause.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalized = normalizeWhitespace(whereClause.description)
+            signature += " " + normalized
         }
         
         return signature

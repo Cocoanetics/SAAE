@@ -210,7 +210,6 @@ tags
 
 # Documentation generated files
 docs/
-Documentation/
 *.docset
 
 # Logs

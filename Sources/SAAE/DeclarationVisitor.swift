@@ -88,6 +88,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         
         let name = node.name.text
         let fullName = generateFullName(name)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         // Process members if this is a container type
@@ -100,6 +101,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: nil, // Container types don't have signatures in this implementation
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
             members: members.isEmpty ? nil : members
         )
@@ -117,6 +119,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let extendedType = node.extendedType.description.trimmingCharacters(in: .whitespacesAndNewlines)
         let name = extendedType
         let fullName = generateFullName(name)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         // Process members of the extension
@@ -129,6 +132,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: nil,
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
             members: members.isEmpty ? nil : members
         )
@@ -146,6 +150,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let fullName = generateFullName(name)
         let signature = generateFunctionSignature(node)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -155,6 +160,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
         
@@ -165,6 +171,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
     private func processVariable(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return .skipChildren }
+        
+        let attributes = extractAttributes(from: node)
         
         // Variables can have multiple bindings
         for binding in node.bindings {
@@ -184,6 +192,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
                     fullName: fullName,
                     signature: signature,
                     visibility: visibility.stringValue,
+                    attributes: attributes.isEmpty ? nil : attributes,
                     documentation: documentation
                 )
                 
@@ -203,6 +212,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = "init"
         let fullName = generateFullName(name)
         let signature = generateInitializerSignature(node)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -212,6 +222,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
         
@@ -229,6 +240,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = "subscript"
         let fullName = generateFullName(name)
         let signature = generateSubscriptSignature(node)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -238,6 +250,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
         
@@ -255,6 +268,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let fullName = generateFullName(name)
         let signature = generateTypeAliasSignature(node)
+        let attributes = extractAttributes(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -264,6 +278,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
         
@@ -409,6 +424,48 @@ internal class DeclarationVisitor: SyntaxVisitor {
             }
         }
         return .internal // Default visibility in Swift
+    }
+    
+    private func extractAttributes<T: SyntaxProtocol>(from node: T) -> [String] {
+        // Try to extract attributes from different declaration types
+        var attributes: AttributeListSyntax?
+        
+        if let structDecl = node.as(StructDeclSyntax.self) {
+            attributes = structDecl.attributes
+        } else if let classDecl = node.as(ClassDeclSyntax.self) {
+            attributes = classDecl.attributes
+        } else if let enumDecl = node.as(EnumDeclSyntax.self) {
+            attributes = enumDecl.attributes
+        } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
+            attributes = protocolDecl.attributes
+        } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
+            attributes = extensionDecl.attributes
+        } else if let functionDecl = node.as(FunctionDeclSyntax.self) {
+            attributes = functionDecl.attributes
+        } else if let variableDecl = node.as(VariableDeclSyntax.self) {
+            attributes = variableDecl.attributes
+        } else if let initDecl = node.as(InitializerDeclSyntax.self) {
+            attributes = initDecl.attributes
+        } else if let subscriptDecl = node.as(SubscriptDeclSyntax.self) {
+            attributes = subscriptDecl.attributes
+        } else if let typeAliasDecl = node.as(TypeAliasDeclSyntax.self) {
+            attributes = typeAliasDecl.attributes
+        }
+        
+        guard let attributes = attributes else {
+            return []
+        }
+        
+        var attributeStrings: [String] = []
+        
+        for attribute in attributes {
+            if let attr = attribute.as(AttributeSyntax.self) {
+                let attributeText = normalizeWhitespace(attr.description)
+                attributeStrings.append(attributeText)
+            }
+        }
+        
+        return attributeStrings
     }
     
     private func extractDocumentation<T: SyntaxProtocol>(from node: T) -> Documentation? {

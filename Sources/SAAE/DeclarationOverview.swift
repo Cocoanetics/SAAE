@@ -19,6 +19,7 @@ internal struct DeclarationOverview: Codable {
     internal let fullName: String?
     internal let signature: String?
     internal let visibility: String
+    internal let attributes: [String]?
     internal let documentation: Documentation?
     internal let members: [DeclarationOverview]?
     
@@ -29,6 +30,7 @@ internal struct DeclarationOverview: Codable {
         fullName: String? = nil,
         signature: String? = nil,
         visibility: String,
+        attributes: [String]? = nil,
         documentation: Documentation? = nil,
         members: [DeclarationOverview]? = nil
     ) {
@@ -38,6 +40,7 @@ internal struct DeclarationOverview: Codable {
         self.fullName = fullName
         self.signature = signature
         self.visibility = visibility
+        self.attributes = attributes
         self.documentation = documentation
         self.members = members
     }

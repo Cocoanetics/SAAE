@@ -110,6 +110,13 @@ public class SAAE {
         func addDeclaration(_ decl: DeclarationOverview, indentLevel: Int = 0) {
             let indent = String(repeating: "   ", count: indentLevel)
             
+            // Add attributes if present (property wrappers, Swift macros, etc.)
+            if let attributes = decl.attributes, !attributes.isEmpty {
+                for attribute in attributes {
+                    interface += "\(indent)\(attribute)\n"
+                }
+            }
+            
             // Add documentation if available
             if let documentation = decl.documentation {
                 let hasParameters = !documentation.parameters.isEmpty
@@ -303,6 +310,10 @@ public class SAAE {
             
             markdown += "**Path:** `\(decl.path)`  \n"
             markdown += "**Visibility:** `\(decl.visibility)`  \n"
+            
+            if let attributes = decl.attributes, !attributes.isEmpty {
+                markdown += "**Attributes:** `\(attributes.joined(separator: " "))`  \n"
+            }
             
             if let signature = decl.signature {
                 markdown += "**Signature:** `\(signature)`  \n"

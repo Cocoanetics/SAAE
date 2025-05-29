@@ -54,19 +54,130 @@ internal class DeclarationVisitor: SyntaxVisitor {
     }
     
     override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        return processFunction(node)
+        let visibility = extractVisibility(from: node)
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        currentIndex += 1
+        let currentPath = generatePath()
+        
+        let name = node.name.text
+        let fullName = generateFullName(name)
+        let signature = generateFunctionSignature(node)
+        let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
+        let documentation = extractDocumentation(from: node)
+        
+        let overview = DeclarationOverview(
+            path: currentPath,
+            type: "func",
+            name: name,
+            fullName: fullName,
+            signature: signature,
+            visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
+            attributes: attributes.isEmpty ? nil : attributes,
+            documentation: documentation
+        )
+        
+        declarations.append(overview)
+        return .skipChildren
     }
     
     override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-        return processVariable(node)
+        let visibility = extractVisibility(from: node)
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
+        
+        // Variables can have multiple bindings
+        for binding in node.bindings {
+            if let pattern = binding.pattern.as(IdentifierPatternSyntax.self) {
+                currentIndex += 1
+                let currentPath = generatePath()
+                
+                let name = pattern.identifier.text
+                let fullName = generateFullName(name)
+                let signature = generateVariableSignature(binding, isLet: node.bindingSpecifier.text == "let")
+                let type = node.bindingSpecifier.text
+                let documentation = extractDocumentation(from: node)
+                
+                let overview = DeclarationOverview(
+                    path: currentPath,
+                    type: type, // "var" or "let"
+                    name: name,
+                    fullName: fullName,
+                    signature: signature,
+                    visibility: visibility.stringValue,
+                    modifiers: modifiers.isEmpty ? nil : modifiers,
+                    attributes: attributes.isEmpty ? nil : attributes,
+                    documentation: documentation
+                )
+                
+                declarations.append(overview)
+            }
+        }
+        return .skipChildren
     }
     
     override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-        return processInitializer(node)
+        let visibility = extractVisibility(from: node)
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        currentIndex += 1
+        let currentPath = generatePath()
+        
+        let name = "init"
+        let fullName = generateFullName(name)
+        let signature = generateInitializerSignature(node)
+        let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
+        let documentation = extractDocumentation(from: node)
+        
+        let overview = DeclarationOverview(
+            path: currentPath,
+            type: "initializer",
+            name: name,
+            fullName: fullName,
+            signature: signature,
+            visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
+            attributes: attributes.isEmpty ? nil : attributes,
+            documentation: documentation
+        )
+        
+        declarations.append(overview)
+        return .skipChildren
     }
     
     override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
-        return processSubscript(node)
+        let visibility = extractVisibility(from: node)
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        currentIndex += 1
+        let currentPath = generatePath()
+        
+        let name = "subscript"
+        let fullName = generateFullName(name)
+        let signature = generateSubscriptSignature(node)
+        let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
+        let documentation = extractDocumentation(from: node)
+        
+        let overview = DeclarationOverview(
+            path: currentPath,
+            type: "subscript",
+            name: name,
+            fullName: fullName,
+            signature: signature,
+            visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
+            attributes: attributes.isEmpty ? nil : attributes,
+            documentation: documentation
+        )
+        
+        declarations.append(overview)
+        return .skipChildren
     }
     
     override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -74,7 +185,43 @@ internal class DeclarationVisitor: SyntaxVisitor {
     }
     
     override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
-        return processEnumCase(node)
+        let visibility = extractVisibility(from: node)
+        guard visibility >= minVisibility else { return .skipChildren }
+        
+        let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
+        
+        for enumCase in node.elements {
+            currentIndex += 1
+            let currentPath = generatePath()
+            
+            let name = enumCase.name.text
+            let fullName = generateFullName(name)
+            let signature: String?
+            
+            if let parameters = enumCase.parameterClause {
+                signature = "\(name)\(parameters.description.trimmingCharacters(in: .whitespacesAndNewlines))"
+            } else {
+                signature = name
+            }
+            
+            let documentation = extractDocumentation(from: node)
+            
+            let overview = DeclarationOverview(
+                path: currentPath,
+                type: "case",
+                name: name,
+                fullName: fullName,
+                signature: signature,
+                visibility: visibility.stringValue,
+                modifiers: modifiers.isEmpty ? nil : modifiers,
+                attributes: attributes.isEmpty ? nil : attributes,
+                documentation: documentation
+            )
+            
+            declarations.append(overview)
+        }
+        return .skipChildren
     }
     
     // MARK: - Processing Methods
@@ -89,6 +236,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let fullName = generateFullName(name)
         let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
         let documentation = extractDocumentation(from: node)
         
         // Process members if this is a container type
@@ -101,6 +249,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: nil, // Container types don't have signatures in this implementation
             visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
             members: members.isEmpty ? nil : members
@@ -120,6 +269,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let name = extendedType
         let fullName = generateFullName(name)
         let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
         let documentation = extractDocumentation(from: node)
         
         // Process members of the extension
@@ -132,6 +282,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: nil,
             visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
             members: members.isEmpty ? nil : members
@@ -140,39 +291,12 @@ internal class DeclarationVisitor: SyntaxVisitor {
         declarations.append(overview)
     }
     
-    private func processFunction(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-        let visibility = extractVisibility(from: node)
-        guard visibility >= minVisibility else { return .skipChildren }
-        
-        currentIndex += 1
-        let currentPath = generatePath()
-        
-        let name = node.name.text
-        let fullName = generateFullName(name)
-        let signature = generateFunctionSignature(node)
-        let attributes = extractAttributes(from: node)
-        let documentation = extractDocumentation(from: node)
-        
-        let overview = DeclarationOverview(
-            path: currentPath,
-            type: "func",
-            name: name,
-            fullName: fullName,
-            signature: signature,
-            visibility: visibility.stringValue,
-            attributes: attributes.isEmpty ? nil : attributes,
-            documentation: documentation
-        )
-        
-        declarations.append(overview)
-        return .skipChildren
-    }
-    
     private func processVariable(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return .skipChildren }
         
         let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
         
         // Variables can have multiple bindings
         for binding in node.bindings {
@@ -183,15 +307,17 @@ internal class DeclarationVisitor: SyntaxVisitor {
                 let name = pattern.identifier.text
                 let fullName = generateFullName(name)
                 let signature = generateVariableSignature(binding, isLet: node.bindingSpecifier.text == "let")
+                let type = node.bindingSpecifier.text
                 let documentation = extractDocumentation(from: node)
                 
                 let overview = DeclarationOverview(
                     path: currentPath,
-                    type: node.bindingSpecifier.text, // "var" or "let"
+                    type: type, // "var" or "let"
                     name: name,
                     fullName: fullName,
                     signature: signature,
                     visibility: visibility.stringValue,
+                    modifiers: modifiers.isEmpty ? nil : modifiers,
                     attributes: attributes.isEmpty ? nil : attributes,
                     documentation: documentation
                 )
@@ -199,34 +325,6 @@ internal class DeclarationVisitor: SyntaxVisitor {
                 declarations.append(overview)
             }
         }
-        return .skipChildren
-    }
-    
-    private func processInitializer(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-        let visibility = extractVisibility(from: node)
-        guard visibility >= minVisibility else { return .skipChildren }
-        
-        currentIndex += 1
-        let currentPath = generatePath()
-        
-        let name = "init"
-        let fullName = generateFullName(name)
-        let signature = generateInitializerSignature(node)
-        let attributes = extractAttributes(from: node)
-        let documentation = extractDocumentation(from: node)
-        
-        let overview = DeclarationOverview(
-            path: currentPath,
-            type: "initializer",
-            name: name,
-            fullName: fullName,
-            signature: signature,
-            visibility: visibility.stringValue,
-            attributes: attributes.isEmpty ? nil : attributes,
-            documentation: documentation
-        )
-        
-        declarations.append(overview)
         return .skipChildren
     }
     
@@ -241,6 +339,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let fullName = generateFullName(name)
         let signature = generateSubscriptSignature(node)
         let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -250,6 +349,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
@@ -269,6 +369,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let fullName = generateFullName(name)
         let signature = generateTypeAliasSignature(node)
         let attributes = extractAttributes(from: node)
+        let modifiers = extractModifiers(from: node)
         let documentation = extractDocumentation(from: node)
         
         let overview = DeclarationOverview(
@@ -278,52 +379,12 @@ internal class DeclarationVisitor: SyntaxVisitor {
             fullName: fullName,
             signature: signature,
             visibility: visibility.stringValue,
+            modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
         )
         
         declarations.append(overview)
-        return .skipChildren
-    }
-    
-    private func processEnumCase(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
-        // Enum cases inherit visibility from their parent enum, but can also have explicit modifiers
-        let explicitVisibility = extractVisibility(from: node)
-        let visibility = explicitVisibility != .internal ? explicitVisibility : parentVisibility
-        
-        guard visibility >= minVisibility else { return .skipChildren }
-        
-        // Enum cases can have multiple elements in a single declaration
-        // e.g., "case first, second, third"
-        for element in node.elements {
-            currentIndex += 1
-            let currentPath = generatePath()
-            
-            let name = element.name.text
-            let fullName = generateFullName(name)
-            let documentation = extractDocumentation(from: node)
-            
-            // Generate signature for cases with associated values
-            var signature = "case \(name)"
-            if let associatedValue = element.parameterClause {
-                signature += associatedValue.description.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            if let rawValue = element.rawValue {
-                signature += " = \(rawValue.value.description.trimmingCharacters(in: .whitespacesAndNewlines))"
-            }
-            
-            let overview = DeclarationOverview(
-                path: currentPath,
-                type: "case",
-                name: name,
-                fullName: fullName,
-                signature: signature,
-                visibility: visibility.stringValue,
-                documentation: documentation
-            )
-            
-            declarations.append(overview)
-        }
         return .skipChildren
     }
     
@@ -638,5 +699,48 @@ internal class DeclarationVisitor: SyntaxVisitor {
         }
         
         return signature
+    }
+    
+    private func extractModifiers<T: SyntaxProtocol>(from node: T) -> [String] {
+        // Try to extract modifiers from different declaration types
+        var modifiers: DeclModifierListSyntax?
+        
+        if let structDecl = node.as(StructDeclSyntax.self) {
+            modifiers = structDecl.modifiers
+        } else if let classDecl = node.as(ClassDeclSyntax.self) {
+            modifiers = classDecl.modifiers
+        } else if let enumDecl = node.as(EnumDeclSyntax.self) {
+            modifiers = enumDecl.modifiers
+        } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
+            modifiers = protocolDecl.modifiers
+        } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
+            modifiers = extensionDecl.modifiers
+        } else if let functionDecl = node.as(FunctionDeclSyntax.self) {
+            modifiers = functionDecl.modifiers
+        } else if let variableDecl = node.as(VariableDeclSyntax.self) {
+            modifiers = variableDecl.modifiers
+        } else if let initDecl = node.as(InitializerDeclSyntax.self) {
+            modifiers = initDecl.modifiers
+        } else if let subscriptDecl = node.as(SubscriptDeclSyntax.self) {
+            modifiers = subscriptDecl.modifiers
+        } else if let typeAliasDecl = node.as(TypeAliasDeclSyntax.self) {
+            modifiers = typeAliasDecl.modifiers
+        }
+        
+        guard let modifiers = modifiers else {
+            return []
+        }
+        
+        var modifierStrings: [String] = []
+        
+        for modifier in modifiers {
+            let modifierName = modifier.name.text
+            // Skip visibility modifiers as they're handled separately
+            if !["private", "fileprivate", "internal", "package", "public", "open"].contains(modifierName) {
+                modifierStrings.append(modifierName)
+            }
+        }
+        
+        return modifierStrings
     }
 } 

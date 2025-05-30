@@ -454,10 +454,10 @@ extension SyntaxErrorDetail {
     
     /// Applies heuristics to improve error positioning for better UX
     private static func improveErrorPositioning(originalLocation: SourceLocation, message: String, sourceLines: [String]) -> SourceLocation {
-        // Heuristic 1: "unexpected code ... in function" errors are often mispositioned by SwiftSyntax
-        // They point to the function body instead of the function signature where the actual error is
-        if message.contains("unexpected code") && message.contains("in function") {
-            return adjustFunctionSignatureError(originalLocation: originalLocation, sourceLines: sourceLines)
+        // General heuristic: "unexpected code 'XXXX' ..." errors are often mispositioned by SwiftSyntax
+        // They should point to where the quoted code actually appears, not where SwiftSyntax thinks it should be reported
+        if message.contains("unexpected code") {
+            return adjustUnexpectedCodeError(originalLocation: originalLocation, sourceLines: sourceLines, message: message)
         }
         
         // Add more heuristics here as needed in the future
@@ -465,38 +465,56 @@ extension SyntaxErrorDetail {
         return originalLocation
     }
     
-    /// Adjusts error position for function signature errors that are misplaced by SwiftSyntax
-    private static func adjustFunctionSignatureError(originalLocation: SourceLocation, sourceLines: [String]) -> SourceLocation {
+    /// Adjusts error position for "unexpected code 'XXXX' ..." errors that are misplaced by SwiftSyntax
+    private static func adjustUnexpectedCodeError(originalLocation: SourceLocation, sourceLines: [String], message: String) -> SourceLocation {
         let currentLineIndex = originalLocation.line - 1 // Convert to 0-based
         
-        // Look backwards from current position to find the function signature
+        // Extract the problematic code from the error message
+        // Pattern: "unexpected code 'XXXXX' ..."
+        var problematicCode: String? = nil
+        
+        if let startQuote = message.range(of: "'"),
+           let endQuote = message.range(of: "'", range: startQuote.upperBound..<message.endIndex) {
+            problematicCode = String(message[startQuote.upperBound..<endQuote.lowerBound])
+        }
+        
+        // If we can't extract specific code, return original location
+        guard let code = problematicCode else {
+            return originalLocation
+        }
+        
+        // Look backwards from current position to find the line containing the problematic code
         var searchLineIndex = currentLineIndex - 1
-        let maxSearchLines = 3 // Don't search too far back
+        let maxSearchLines = 5 // Search a reasonable distance back
         
         while searchLineIndex >= 0 && (currentLineIndex - searchLineIndex) <= maxSearchLines {
             guard searchLineIndex < sourceLines.count else { break }
             
-            let originalLine = sourceLines[searchLineIndex] // Keep original with whitespace
-            let trimmedLine = originalLine.trimmingCharacters(in: .whitespaces)
+            let originalLine = sourceLines[searchLineIndex]
             
-            // Check if this line contains a function signature with suspicious syntax
-            if trimmedLine.hasPrefix("func ") && (trimmedLine.contains(": ") || trimmedLine.contains("->")) {
-                // This looks like a problematic function signature
-                // Calculate column position on the ORIGINAL line (with whitespace)
-                var column = 1
-                
-                // Find the position of the problematic syntax in the original line
-                if let colonRange = originalLine.range(of: ": ") {
-                    column = originalLine.distance(from: originalLine.startIndex, to: colonRange.lowerBound) + 1
-                } else if let arrowRange = originalLine.range(of: "->") {
-                    column = originalLine.distance(from: originalLine.startIndex, to: arrowRange.lowerBound) + 1
+            // Check if this line contains the problematic code mentioned in the error
+            if originalLine.contains(code) {
+                // Find the position of the problematic code in the line
+                guard let codeRange = originalLine.range(of: code) else {
+                    // Fallback to start of non-whitespace content
+                    let column = originalLine.firstIndex(where: { !$0.isWhitespace }).map { 
+                        originalLine.distance(from: originalLine.startIndex, to: $0) + 1 
+                    } ?? 1
+                    
+                    return SourceLocation(
+                        line: searchLineIndex + 1, // Convert back to 1-based
+                        column: column,
+                        offset: originalLocation.offset,
+                        file: originalLocation.file
+                    )
                 }
                 
-                // Return adjusted location pointing to the function signature
+                let column = originalLine.distance(from: originalLine.startIndex, to: codeRange.lowerBound) + 1
+                
                 return SourceLocation(
                     line: searchLineIndex + 1, // Convert back to 1-based
                     column: column,
-                    offset: originalLocation.offset, // Keep original offset as fallback
+                    offset: originalLocation.offset,
                     file: originalLocation.file
                 )
             }
@@ -504,7 +522,7 @@ extension SyntaxErrorDetail {
             searchLineIndex -= 1
         }
         
-        // If no function signature found, return original location
+        // If no problematic code found, return original location
         return originalLocation
     }
 } 

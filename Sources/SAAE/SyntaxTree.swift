@@ -476,19 +476,20 @@ extension SyntaxErrorDetail {
         while searchLineIndex >= 0 && (currentLineIndex - searchLineIndex) <= maxSearchLines {
             guard searchLineIndex < sourceLines.count else { break }
             
-            let line = sourceLines[searchLineIndex].trimmingCharacters(in: .whitespaces)
+            let originalLine = sourceLines[searchLineIndex] // Keep original with whitespace
+            let trimmedLine = originalLine.trimmingCharacters(in: .whitespaces)
             
             // Check if this line contains a function signature with suspicious syntax
-            if line.hasPrefix("func ") && (line.contains(": ") || line.contains("->")) {
+            if trimmedLine.hasPrefix("func ") && (trimmedLine.contains(": ") || trimmedLine.contains("->")) {
                 // This looks like a problematic function signature
-                // Calculate column position for the suspicious part
+                // Calculate column position on the ORIGINAL line (with whitespace)
                 var column = 1
                 
-                // Find the position of the problematic syntax
-                if let colonRange = line.range(of: ": ") {
-                    column = line.distance(from: line.startIndex, to: colonRange.lowerBound) + 1
-                } else if let arrowRange = line.range(of: "->") {
-                    column = line.distance(from: line.startIndex, to: arrowRange.lowerBound) + 1
+                // Find the position of the problematic syntax in the original line
+                if let colonRange = originalLine.range(of: ": ") {
+                    column = originalLine.distance(from: originalLine.startIndex, to: colonRange.lowerBound) + 1
+                } else if let arrowRange = originalLine.range(of: "->") {
+                    column = originalLine.distance(from: originalLine.startIndex, to: arrowRange.lowerBound) + 1
                 }
                 
                 // Return adjusted location pointing to the function signature

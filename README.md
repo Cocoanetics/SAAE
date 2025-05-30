@@ -206,37 +206,43 @@ let incomplete = 1 + + 2  // ❌ Invalid operator sequence
 Tests/Resources/ErrorSamples/type_annotations.swift:6:18: error: expected ':' in type annotation
 5 ┃     // Missing colon in type annotation
 6 ┃     let property1 String = "hello"
-  ┃                  ┗━━ error: expected ':' in type annotation
+  ┃                  ┣━━ error: expected ':' in type annotation
+  ┃                  ┗━━ fix-it: insert `: ` and remove ` `
 7 ┃     
 
 Tests/Resources/ErrorSamples/type_annotations.swift:9:9: error: expected pattern in variable
  8 ┃     // Missing variable name
  9 ┃     let = 42
-   ┃         ┗━━ error: expected pattern in variable
+   ┃         ┣━━ error: expected pattern in variable
+   ┃         ┗━━ fix-it: insert `<#pattern#> `
 10 ┃     
 
 Tests/Resources/ErrorSamples/type_annotations.swift:12:24: error: expected '=' in variable
 11 ┃     // Invalid type syntax
 12 ┃     var property2: Int String = 5
-   ┃                        ┗━━ error: expected '=' in variable
+   ┃                        ┣━━ error: expected '=' in variable
+   ┃                        ┗━━ fix-it: insert `= `
 13 ┃     
 
 Tests/Resources/ErrorSamples/type_annotations.swift:15:20: error: expected type in type annotation
 14 ┃     // Missing type after colon
 15 ┃     let property3: = "test"
-   ┃                    ┗━━ error: expected type in type annotation
+   ┃                    ┣━━ error: expected type in type annotation
+   ┃                    ┗━━ fix-it: insert `<#type#> `
 16 ┃     
 
 Tests/Resources/ErrorSamples/type_annotations.swift:19:21: error: expected ':' in type annotation
 18 ┃         // Missing colon in local variable
 19 ┃         let localVar Int = 10
-   ┃                     ┗━━ error: expected ':' in type annotation
+   ┃                     ┣━━ error: expected ':' in type annotation
+   ┃                     ┗━━ fix-it: insert `: ` and remove ` `
 20 ┃         
 
 Tests/Resources/ErrorSamples/type_annotations.swift:22:34: error: expected ':' and type in parameter
 21 ┃         // Invalid parameter syntax
 22 ┃         func invalidParam( String) {
-   ┃                                  ┗━━ error: expected ':' and type in parameter
+   ┃                                  ┣━━ error: expected ':' and type in parameter
+   ┃                                  ┗━━ fix-it: insert `: <#type#>`
 23 ┃             print("invalid")
 ```
 

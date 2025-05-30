@@ -1,39 +1,28 @@
-import XCTest
+import Testing
+import Foundation
 @testable import SAAE
 
-// Mock enums for test stubs
-enum MockFormat {
-    case json, yaml, markdown, interface
-}
-
-enum MockVisibility {
-    case `public`, `internal`
-}
-
-// Extension to allow direct access to these values
-extension MockFormat {
-    static let json = MockFormat.json
-    static let yaml = MockFormat.yaml
-    static let markdown = MockFormat.markdown
-    static let interface = MockFormat.interface
-}
-
-extension MockVisibility {
-    static let `public` = MockVisibility.public
-    static let `internal` = MockVisibility.internal
-}
-
-// Temporary stub for missing helper function
-func generateOverview(string: String, format: Any, minVisibility: Any? = nil) throws -> String {
-    // This is a stub for Phase 1 functionality that we're implementing in Phase 2
+/// Helper function that generates a code overview using the proper SAAE API.
+/// This replaces the temporary stub and uses the actual CodeOverview implementation.
+func generateOverview(string: String, format: OutputFormat, minVisibility: VisibilityLevel? = nil) throws -> String {
     let tree = try SyntaxTree(string: string)
-    let overview = CodeOverview(tree: tree)
-    return try overview.json() // Return basic JSON for now
+    let overview = CodeOverview(tree: tree, minVisibility: minVisibility ?? .internal)
+    
+    switch format {
+    case .json:
+        return try overview.json()
+    case .yaml:
+        return try overview.yaml()
+    case .markdown:
+        return overview.markdown()
+    case .interface:
+        return overview.interface()
+    }
 }
 
-final class SAAETests: XCTestCase {
+struct SAAETests {
     
-    func testBasicParsing() throws {
+    @Test func basicParsing() throws {
         let swiftCode = """
         import Foundation
         
@@ -46,10 +35,10 @@ final class SAAETests: XCTestCase {
         
         // Test that we can create a SyntaxTree from string
         let tree = try SyntaxTree(string: swiftCode)
-        XCTAssertNotNil(tree)
+        #expect(tree.sourceFile.statements.count > 0)
     }
     
-    func testJSONOutput() throws {
+    @Test func jsonOutput() throws {
         let swiftCode = """
         import Foundation
         
@@ -60,42 +49,42 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let overview = try generateOverview(string: swiftCode, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: OutputFormat.json)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("\"type\" : \"class\""))
-        XCTAssertTrue(overview.contains("TestClass"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("\"type\" : \"class\""))
+        #expect(overview.contains("TestClass"))
     }
     
-    func testYAMLOutput() throws {
+    @Test func yamlOutput() throws {
         let swiftCode = """
         public struct TestStruct {
             public let property: String
         }
         """
         
-        let overview = try generateOverview(string: swiftCode, format: .yaml)
+        let overview = try generateOverview(string: swiftCode, format: OutputFormat.yaml)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("type: struct"))
-        XCTAssertTrue(overview.contains("TestStruct"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("type: struct"))
+        #expect(overview.contains("TestStruct"))
     }
     
-    func testMarkdownOutput() throws {
+    @Test func markdownOutput() throws {
         let swiftCode = """
         public protocol TestProtocol {
             func testMethod()
         }
         """
         
-        let overview = try generateOverview(string: swiftCode, format: .markdown)
+        let overview = try generateOverview(string: swiftCode, format: OutputFormat.markdown)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("# Code Overview"))
-        XCTAssertTrue(overview.contains("TestProtocol"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("# Code Overview"))
+        #expect(overview.contains("TestProtocol"))
     }
     
-    func testVisibilityFiltering() throws {
+    @Test func visibilityFiltering() throws {
         let swiftCode = """
         public struct PublicStruct {
             public let publicProperty: String
@@ -109,23 +98,23 @@ final class SAAETests: XCTestCase {
         """
         
         // Test with public visibility
-        let publicOverview = try generateOverview(string: swiftCode, format: .json, minVisibility: .public)
-        XCTAssertTrue(publicOverview.contains("PublicStruct"))
-        XCTAssertTrue(publicOverview.contains("publicProperty"))
-        XCTAssertFalse(publicOverview.contains("InternalStruct"))
-        XCTAssertFalse(publicOverview.contains("internalProperty"))
-        XCTAssertFalse(publicOverview.contains("privateProperty"))
+        let publicOverview = try generateOverview(string: swiftCode, format: OutputFormat.json, minVisibility: .public)
+        #expect(publicOverview.contains("PublicStruct"))
+        #expect(publicOverview.contains("publicProperty"))
+        #expect(!publicOverview.contains("InternalStruct"))
+        #expect(!publicOverview.contains("internalProperty"))
+        #expect(!publicOverview.contains("privateProperty"))
         
         // Test with internal visibility
-        let internalOverview = try generateOverview(string: swiftCode, format: .json, minVisibility: .internal)
-        XCTAssertTrue(internalOverview.contains("PublicStruct"))
-        XCTAssertTrue(internalOverview.contains("publicProperty"))
-        XCTAssertTrue(internalOverview.contains("InternalStruct"))
-        XCTAssertTrue(internalOverview.contains("internalProperty"))
-        XCTAssertFalse(internalOverview.contains("privateProperty"))
+        let internalOverview = try generateOverview(string: swiftCode, format: OutputFormat.json, minVisibility: .internal)
+        #expect(internalOverview.contains("PublicStruct"))
+        #expect(internalOverview.contains("publicProperty"))
+        #expect(internalOverview.contains("InternalStruct"))
+        #expect(internalOverview.contains("internalProperty"))
+        #expect(!internalOverview.contains("privateProperty"))
     }
     
-    func testNestedDeclarations() throws {
+    @Test func nestedDeclarations() throws {
         let swiftCode = """
         public struct OuterStruct {
             public struct InnerStruct {
@@ -139,16 +128,16 @@ final class SAAETests: XCTestCase {
         }
         """
         
-        let overview = try generateOverview(string: swiftCode, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: OutputFormat.json)
         
-        XCTAssertTrue(overview.contains("OuterStruct"))
-        XCTAssertTrue(overview.contains("InnerStruct"))
-        XCTAssertTrue(overview.contains("InnerEnum"))
-        XCTAssertTrue(overview.contains("first"))
-        XCTAssertTrue(overview.contains("second"))
+        #expect(overview.contains("OuterStruct"))
+        #expect(overview.contains("InnerStruct"))
+        #expect(overview.contains("InnerEnum"))
+        #expect(overview.contains("first"))
+        #expect(overview.contains("second"))
     }
     
-    func testSwiftDocumentation() throws {
+    @Test func swiftDocumentation() throws {
         let swiftCode = """
         public struct DocumentedStruct {
             /// This is a documented property
@@ -162,12 +151,12 @@ final class SAAETests: XCTestCase {
         
         let overview = try generateOverview(string: swiftCode, format: .markdown)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("documented"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("documented"))
         // Documentation should be included in markdown format
     }
     
-    func testDocumentationParsing() throws {
+    @Test func documentationParsing() throws {
         let swiftCode = """
         public class DocumentedClass {
             /// This is a test function
@@ -182,25 +171,36 @@ final class SAAETests: XCTestCase {
         
         let overview = try generateOverview(string: swiftCode, format: .json)
         
-        XCTAssertTrue(overview.contains("This is a test function"))
-        XCTAssertTrue(overview.contains("input"))
-        XCTAssertTrue(overview.contains("The input string"))
+        #expect(overview.contains("This is a test function"))
+        #expect(overview.contains("input"))
+        #expect(overview.contains("The input string"))
     }
     
-    func testFileNotFoundError() throws {
+    @Test func fileNotFoundError() throws {
         let nonExistentURL = URL(fileURLWithPath: "/nonexistent/file.swift")
         
-        XCTAssertThrowsError(try SyntaxTree(url: nonExistentURL)) { error in
-            if let saaError = error as? SAAEError,
-               case .fileNotFound = saaError {
+        #expect(throws: SAAEError.self) {
+            try SyntaxTree(url: nonExistentURL)
+        }
+        
+        // More specific error checking
+        do {
+            _ = try SyntaxTree(url: nonExistentURL)
+            Issue.record("Expected SAAEError.fileNotFound to be thrown")
+        } catch let error as SAAEError {
+            switch error {
+            case .fileNotFound:
                 // Expected error
-            } else {
-                XCTFail("Expected SAAEError.fileNotFound, got \(error)")
+                break
+            default:
+                Issue.record("Expected SAAEError.fileNotFound, got \(error)")
             }
+        } catch {
+            Issue.record("Expected SAAEError.fileNotFound, got \(error)")
         }
     }
     
-    func testPathGeneration() throws {
+    @Test func pathGeneration() throws {
         let swiftCode = """
         public struct Container {
             public struct Inner {
@@ -213,11 +213,11 @@ final class SAAETests: XCTestCase {
         let overview = try generateOverview(string: swiftCode, format: .json)
         
         // Check that paths are generated correctly
-        XCTAssertTrue(overview.contains("1.1.1"))  // Container.Inner.property path
-        XCTAssertTrue(overview.contains("1.1.2"))  // Container.Inner.method path
+        #expect(overview.contains("1.1.1"))  // Container.Inner.property path
+        #expect(overview.contains("1.1.2"))  // Container.Inner.method path
     }
     
-    func testInterfaceFormat() throws {
+    @Test func interfaceFormat() throws {
         let swiftCode = """
         import Foundation
         
@@ -237,14 +237,14 @@ final class SAAETests: XCTestCase {
         
         let overview = try generateOverview(string: swiftCode, format: .interface)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("public class TestClass"))
-        XCTAssertTrue(overview.contains("public var property: String { get }"))
-        XCTAssertTrue(overview.contains("public func method(input: String) -> String"))
-        XCTAssertTrue(overview.contains("import Foundation"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("public class TestClass"))
+        #expect(overview.contains("public var property: String { get }"))
+        #expect(overview.contains("public func method(input: String) -> String"))
+        #expect(overview.contains("import Foundation"))
     }
     
-    func testModifiersSupport() throws {
+    @Test func modifiersSupport() throws {
         let swiftCode = """
         public class ModifiersTest {
             static let staticProperty: String = "test"
@@ -264,25 +264,25 @@ final class SAAETests: XCTestCase {
         let overview = try generateOverview(string: swiftCode, format: .json)
         
         // Check that all declaration types are captured
-        XCTAssertTrue(overview.contains("class"))
-        XCTAssertTrue(overview.contains("let"))
-        XCTAssertTrue(overview.contains("var"))
-        XCTAssertTrue(overview.contains("func"))
-        XCTAssertTrue(overview.contains("init"))
+        #expect(overview.contains("class"))
+        #expect(overview.contains("let"))
+        #expect(overview.contains("var"))
+        #expect(overview.contains("func"))
+        #expect(overview.contains("init"))
         
         // Check that modifiers are captured
-        XCTAssertTrue(overview.contains("static"))
-        XCTAssertTrue(overview.contains("final"))
-        XCTAssertTrue(overview.contains("convenience"))
-        XCTAssertTrue(overview.contains("lazy"))
-        XCTAssertTrue(overview.contains("weak"))
-        XCTAssertTrue(overview.contains("mutating"))
-        XCTAssertTrue(overview.contains("nonmutating"))
-        XCTAssertTrue(overview.contains("override"))
-        XCTAssertTrue(overview.contains("required"))
+        #expect(overview.contains("static"))
+        #expect(overview.contains("final"))
+        #expect(overview.contains("convenience"))
+        #expect(overview.contains("lazy"))
+        #expect(overview.contains("weak"))
+        #expect(overview.contains("mutating"))
+        #expect(overview.contains("nonmutating"))
+        #expect(overview.contains("override"))
+        #expect(overview.contains("required"))
     }
     
-    func testEnumCasesInterfaceFormat() throws {
+    @Test func enumCasesInterfaceFormat() throws {
         let swiftCode = """
         public enum TestEnum {
             case first
@@ -297,24 +297,24 @@ final class SAAETests: XCTestCase {
         
         let overview = try generateOverview(string: swiftCode, format: .interface)
         
-        XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("public enum TestEnum"))
+        #expect(!overview.isEmpty)
+        #expect(overview.contains("public enum TestEnum"))
         
         // Cases should not show visibility (they inherit from parent enum)
-        XCTAssertTrue(overview.contains("case first"))
-        XCTAssertTrue(overview.contains("case second(String)"))
-        XCTAssertTrue(overview.contains("case third(Int, String)"))
+        #expect(overview.contains("case first"))
+        #expect(overview.contains("case second(String)"))
+        #expect(overview.contains("case third(Int, String)"))
         
         // But methods should show visibility
-        XCTAssertTrue(overview.contains("public func utilityMethod()"))
+        #expect(overview.contains("public func utilityMethod()"))
         
         // Cases should NOT have redundant "public" prefix
-        XCTAssertFalse(overview.contains("public case first"))
-        XCTAssertFalse(overview.contains("public case second"))
-        XCTAssertFalse(overview.contains("public case third"))
+        #expect(!overview.contains("public case first"))
+        #expect(!overview.contains("public case second"))
+        #expect(!overview.contains("public case third"))
     }
     
-    func testDirectAPIUsage() throws {
+    @Test func directAPIUsage() throws {
         let swiftCode = """
         public struct DirectAPITest {
             public let property: String
@@ -330,14 +330,14 @@ final class SAAETests: XCTestCase {
         let markdownOutput = codeOverview.markdown()
         let interfaceOutput = codeOverview.interface()
         
-        XCTAssertFalse(jsonOutput.isEmpty)
-        XCTAssertFalse(yamlOutput.isEmpty)
-        XCTAssertFalse(markdownOutput.isEmpty)
-        XCTAssertFalse(interfaceOutput.isEmpty)
+        #expect(!jsonOutput.isEmpty)
+        #expect(!yamlOutput.isEmpty)
+        #expect(!markdownOutput.isEmpty)
+        #expect(!interfaceOutput.isEmpty)
         
-        XCTAssertTrue(jsonOutput.contains("DirectAPITest"))
-        XCTAssertTrue(yamlOutput.contains("DirectAPITest"))
-        XCTAssertTrue(markdownOutput.contains("DirectAPITest"))
-        XCTAssertTrue(interfaceOutput.contains("DirectAPITest"))
+        #expect(jsonOutput.contains("DirectAPITest"))
+        #expect(yamlOutput.contains("DirectAPITest"))
+        #expect(markdownOutput.contains("DirectAPITest"))
+        #expect(interfaceOutput.contains("DirectAPITest"))
     }
 } 

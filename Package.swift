@@ -1,4 +1,4 @@
-// swift-tools-version: 5.7
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -20,9 +20,10 @@ let package = Package(
             targets: ["SAAEDemo"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-syntax.git", from: "509.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.0.0"),
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0")
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.2.0"),
+        .package(url: "https://github.com/swiftlang/swift-testing.git", from: "0.7.0")
     ],
     targets: [
         .target(
@@ -42,6 +43,9 @@ let package = Package(
             ]),
         .testTarget(
             name: "SAAETests",
-            dependencies: ["SAAE"]),
+            dependencies: [
+                "SAAE",
+                .product(name: "Testing", package: "swift-testing")
+            ]),
     ]
 ) 

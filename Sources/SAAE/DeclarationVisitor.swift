@@ -595,7 +595,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             if effectSpecifiers.asyncSpecifier != nil {
                 signature += " async"
             }
-            if effectSpecifiers.throwsSpecifier != nil {
+            if effectSpecifiers.throwsClause?.throwsSpecifier != nil {
                 signature += " throws"
             }
         }
@@ -671,7 +671,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             if effectSpecifiers.asyncSpecifier != nil {
                 signature += " async"
             }
-            if effectSpecifiers.throwsSpecifier != nil {
+            if effectSpecifiers.throwsClause?.throwsSpecifier != nil {
                 signature += " throws"
             }
         }

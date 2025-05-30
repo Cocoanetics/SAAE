@@ -47,10 +47,16 @@ public struct SyntaxTree {
     /// - Parameter url: The URL of the Swift source file to parse
     /// - Throws: SAAEError if the file cannot be read or parsed
     public init(url: URL) throws {
-        let string = try String(contentsOf: url)
-        self.sourceFile = Parser.parse(source: string)
-        self.sourceLines = string.split(separator: "\n").map { String($0) }
-        self.locationConverter = SourceLocationConverter(fileName: url.lastPathComponent, tree: self.sourceFile)
+        do {
+            let string = try String(contentsOf: url)
+            self.sourceFile = Parser.parse(source: string)
+            self.sourceLines = string.split(separator: "\n").map { String($0) }
+            self.locationConverter = SourceLocationConverter(fileName: url.lastPathComponent, tree: self.sourceFile)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            throw SAAEError.fileNotFound(url)
+        } catch {
+            throw SAAEError.fileReadError(url, error)
+        }
     }
     
     /// Creates a syntax tree by parsing Swift source code from a string.
@@ -221,7 +227,7 @@ extension SyntaxErrorDetail {
                 case .replace(let oldNode, let newNode):
                     let fixItLocation = converter.location(for: oldNode.position)
                     let fix = SyntaxFixIt(
-						message: fixIt.message.message,
+                        message: String(describing: fixIt.message),
                         originalText: oldNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
                         replacementText: newNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
                         range: fixItLocation
@@ -231,7 +237,7 @@ extension SyntaxErrorDetail {
                 case .replaceLeadingTrivia(let token, let newTrivia):
                     let fixItLocation = converter.location(for: token.position)
                     let fix = SyntaxFixIt(
-                        message: fixIt.message.message,
+                        message: String(describing: fixIt.message),
                         originalText: token.leadingTrivia.description,
                         replacementText: newTrivia.description,
                         range: fixItLocation
@@ -241,7 +247,7 @@ extension SyntaxErrorDetail {
                 case .replaceTrailingTrivia(let token, let newTrivia):
                     let fixItLocation = converter.location(for: token.endPositionBeforeTrailingTrivia)
                     let fix = SyntaxFixIt(
-                        message: fixIt.message.message,
+                        message: String(describing: fixIt.message),
                         originalText: token.trailingTrivia.description,
                         replacementText: newTrivia.description,
                         range: fixItLocation
@@ -252,7 +258,7 @@ extension SyntaxErrorDetail {
                     // Handle any future fix-it types gracefully
                     let fixItLocation = self.location // Fallback to main diagnostic location
                     let fix = SyntaxFixIt(
-                        message: fixIt.message.message,
+                        message: String(describing: fixIt.message),
                         originalText: "",
                         replacementText: "",
                         range: fixItLocation

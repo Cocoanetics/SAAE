@@ -243,30 +243,57 @@ extension SyntaxErrorDetail {
                 switch change {
                 case .replace(let oldNode, let newNode):
                     let fixItLocation = converter.location(for: oldNode.position)
+                    let originalText = oldNode.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let replacementText = newNode.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    
+                    // Generate human-readable message
+                    let message = Self.generateFixItMessage(
+                        originalText: originalText,
+                        replacementText: replacementText
+                    )
+                    
                     let fix = SyntaxFixIt(
-                        message: String(describing: fixIt.message),
-                        originalText: oldNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
-                        replacementText: newNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                        message: message,
+                        originalText: originalText,
+                        replacementText: replacementText,
                         range: fixItLocation
                     )
                     fixIts.append(fix)
                     
                 case .replaceLeadingTrivia(let token, let newTrivia):
                     let fixItLocation = converter.location(for: token.position)
+                    let originalText = token.leadingTrivia.description
+                    let replacementText = newTrivia.description
+                    
+                    // Generate human-readable message
+                    let message = Self.generateFixItMessage(
+                        originalText: originalText,
+                        replacementText: replacementText
+                    )
+                    
                     let fix = SyntaxFixIt(
-                        message: String(describing: fixIt.message),
-                        originalText: token.leadingTrivia.description,
-                        replacementText: newTrivia.description,
+                        message: message,
+                        originalText: originalText,
+                        replacementText: replacementText,
                         range: fixItLocation
                     )
                     fixIts.append(fix)
                     
                 case .replaceTrailingTrivia(let token, let newTrivia):
                     let fixItLocation = converter.location(for: token.endPositionBeforeTrailingTrivia)
+                    let originalText = token.trailingTrivia.description
+                    let replacementText = newTrivia.description
+                    
+                    // Generate human-readable message
+                    let message = Self.generateFixItMessage(
+                        originalText: originalText,
+                        replacementText: replacementText
+                    )
+                    
                     let fix = SyntaxFixIt(
-                        message: String(describing: fixIt.message),
-                        originalText: token.trailingTrivia.description,
-                        replacementText: newTrivia.description,
+                        message: message,
+                        originalText: originalText,
+                        replacementText: replacementText,
                         range: fixItLocation
                     )
                     fixIts.append(fix)
@@ -275,7 +302,7 @@ extension SyntaxErrorDetail {
                     // Handle any future fix-it types gracefully
                     let fixItLocation = self.location // Fallback to main diagnostic location
                     let fix = SyntaxFixIt(
-                        message: String(describing: fixIt.message),
+                        message: "suggested fix",
                         originalText: "",
                         replacementText: "",
                         range: fixItLocation
@@ -308,5 +335,21 @@ extension SyntaxErrorDetail {
             notes.append(syntaxNote)
         }
         self.notes = notes
+    }
+    
+    /// Generates a human-readable fix-it message based on the original and replacement text
+    private static func generateFixItMessage(originalText: String, replacementText: String) -> String {
+        let cleanOriginal = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanReplacement = replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
+            return "insert `\(cleanReplacement)`"
+        } else if !cleanOriginal.isEmpty && cleanReplacement.isEmpty {
+            return "remove `\(cleanOriginal)`"
+        } else if !cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
+            return "replace `\(cleanOriginal)` with `\(cleanReplacement)`"
+        } else {
+            return "fix syntax error"
+        }
     }
 } 

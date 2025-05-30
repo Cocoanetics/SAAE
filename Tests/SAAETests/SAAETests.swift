@@ -340,4 +340,109 @@ struct SAAETests {
         #expect(markdownOutput.contains("DirectAPITest"))
         #expect(interfaceOutput.contains("DirectAPITest"))
     }
+    
+    @Test func unexpectedCodePositioningAccuracy() throws {
+        // This test validates that when SAAE reports "unexpected code 'X'" at line Y, column Z,
+        // the code 'X' actually exists at that exact position in the source file
+        
+        // Find the test resources directory using absolute path
+        let testResourcesURL = URL(fileURLWithPath: "/Users/oliver/Developer/SAAE/Tests/Resources/ErrorSamples")
+        
+        let fileManager = FileManager.default
+        let swiftFiles = try fileManager.contentsOfDirectory(at: testResourcesURL, includingPropertiesForKeys: nil, options: [])
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        
+        var totalUnexpectedCodeErrors = 0
+        var positioningErrors: [(String, String, String)] = [] // file, error, reason
+        
+        for fileURL in swiftFiles {
+            let fileName = fileURL.lastPathComponent
+            print("🔍 Testing positioning in \(fileName)...")
+            
+            let tree = try SyntaxTree(url: fileURL)
+            let errors = tree.syntaxErrors
+            
+            // Get the original source lines for position validation
+            let sourceContent = try String(contentsOf: fileURL)
+            let sourceLines = sourceContent.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+            
+            for error in errors {
+                // Look for "unexpected code '...'" pattern
+                if error.message.contains("unexpected code") {
+                    totalUnexpectedCodeErrors += 1
+                    
+                    // Extract the quoted code from the error message
+                    guard let startQuote = error.message.range(of: "'"),
+                          let endQuote = error.message.range(of: "'", range: startQuote.upperBound..<error.message.endIndex) else {
+                        // Skip errors that don't have quoted code (different error message format)
+                        print("  ⏩ Skipping error without quoted code: '\(error.message)'")
+                        continue
+                    }
+                    
+                    let quotedCode = String(error.message[startQuote.upperBound..<endQuote.lowerBound])
+                    let reportedLine = error.location.line
+                    let reportedColumn = error.location.column
+                    
+                    // Validate line number is within bounds
+                    guard reportedLine > 0 && reportedLine <= sourceLines.count else {
+                        positioningErrors.append((fileName, error.message, "Line \(reportedLine) is out of bounds (file has \(sourceLines.count) lines)"))
+                        continue
+                    }
+                    
+                    let actualLine = sourceLines[reportedLine - 1] // Convert to 0-based index
+                    
+                    // Validate column number is within bounds
+                    guard reportedColumn > 0 && reportedColumn <= actualLine.count + 1 else { // +1 allows for end-of-line
+                        positioningErrors.append((fileName, error.message, "Column \(reportedColumn) is out of bounds for line \(reportedLine) (line has \(actualLine.count) characters)"))
+                        continue
+                    }
+                    
+                    // Check if the quoted code appears at the exact reported position
+                    let startIndex = actualLine.index(actualLine.startIndex, offsetBy: reportedColumn - 1) // Convert to 0-based
+                    
+                    // Ensure we have enough characters left for the quoted code
+                    let remainingLength = actualLine.distance(from: startIndex, to: actualLine.endIndex)
+                    if quotedCode.count > remainingLength {
+                        positioningErrors.append((fileName, error.message, "Not enough characters at position \(reportedLine):\(reportedColumn) for code '\(quotedCode)' (need \(quotedCode.count), have \(remainingLength))"))
+                        continue
+                    }
+                    
+                    let endIndex = actualLine.index(startIndex, offsetBy: quotedCode.count)
+                    let actualCode = String(actualLine[startIndex..<endIndex])
+                    
+                    // Verify exact match
+                    if actualCode != quotedCode {
+                        positioningErrors.append((fileName, error.message, "Expected '\(quotedCode)' at \(reportedLine):\(reportedColumn), but found '\(actualCode)'"))
+                        continue
+                    }
+                    
+                    print("  ✅ \(reportedLine):\(reportedColumn): '\(quotedCode)' - Position verified")
+                }
+            }
+        }
+        
+        // Report results
+        print("\n📊 Test Results:")
+        print("Files tested: \(swiftFiles.count)")
+        print("Total 'unexpected code' errors found: \(totalUnexpectedCodeErrors)")
+        print("Positioning errors: \(positioningErrors.count)")
+        
+        // If there are positioning errors, print them for debugging
+        if !positioningErrors.isEmpty {
+            print("\n❌ Positioning Errors Found:")
+            for (file, message, reason) in positioningErrors {
+                print("  \(file): \(message)")
+                print("    Reason: \(reason)")
+            }
+        }
+        
+        // Assert that all positioning is accurate
+        #expect(positioningErrors.isEmpty, "Found \(positioningErrors.count) positioning errors in 'unexpected code' messages")
+        
+        // Also verify we found at least some unexpected code errors to test
+        #expect(totalUnexpectedCodeErrors > 0, "Expected to find at least some 'unexpected code' errors for testing")
+        
+        print("\n✅ All 'unexpected code' error positions are accurate!")
+    }
 } 

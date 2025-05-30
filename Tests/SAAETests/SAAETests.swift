@@ -345,8 +345,10 @@ struct SAAETests {
         // This test validates that when SAAE reports "unexpected code 'X'" at line Y, column Z,
         // the code 'X' actually exists at that exact position in the source file
         
-        // Find the test resources directory using absolute path
-        let testResourcesURL = URL(fileURLWithPath: "/Users/oliver/Developer/SAAE/Tests/Resources/ErrorSamples")
+        // Find the test resources directory using relative path
+        let currentFile = URL(fileURLWithPath: #file)
+        let projectRoot = currentFile.deletingLastPathComponent().deletingLastPathComponent() // Go up to project root (Tests/SAAETests -> Tests -> SAAE root)
+        let testResourcesURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples")
         
         let fileManager = FileManager.default
         let swiftFiles = try fileManager.contentsOfDirectory(at: testResourcesURL, includingPropertiesForKeys: nil, options: [])
@@ -444,5 +446,166 @@ struct SAAETests {
         #expect(totalUnexpectedCodeErrors > 0, "Expected to find at least some 'unexpected code' errors for testing")
         
         print("\n✅ All 'unexpected code' error positions are accurate!")
+    }
+    
+    @Test func expectedErrorPositioningAccuracy() throws {
+        // Test specific "expected X" errors at known positions
+        
+        let currentFile = URL(fileURLWithPath: #file)
+        let projectRoot = currentFile.deletingLastPathComponent().deletingLastPathComponent() // Go up to project root (Tests/SAAETests -> Tests -> SAAE root)
+        
+        // Test "expected '=' in variable" in type_annotations.swift
+        let typeAnnotationsURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/type_annotations.swift")
+        let tree1 = try SyntaxTree(url: typeAnnotationsURL)
+        let expectedEqualsErrors = tree1.syntaxErrors.filter { $0.message.contains("expected '=' in variable") }
+        
+        #expect(!expectedEqualsErrors.isEmpty, "Should find 'expected =' errors in type_annotations.swift")
+        
+        // Line 12: "var property2: Int String = 5" - error should point to "String"  
+        let expectedEqualsError = expectedEqualsErrors.first { $0.location.line == 12 }
+        #expect(expectedEqualsError != nil, "Should have 'expected =' error on line 12")
+        #expect(expectedEqualsError!.location.column == 24, "Error should point to column 24 where 'String' appears")
+        
+        // Test "expected identifier in parameter" in function_errors.swift (this actually exists)
+        let functionErrorsURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/function_errors.swift")
+        let tree2 = try SyntaxTree(url: functionErrorsURL)
+        let parameterErrors = tree2.syntaxErrors.filter { $0.message.contains("expected identifier in parameter") }
+        
+        #expect(!parameterErrors.isEmpty, "Should find parameter errors in function_errors.swift")
+        
+        // Test "expected '}' to end class" in missing_braces.swift
+        let missingBracesURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/missing_braces.swift")
+        let tree3 = try SyntaxTree(url: missingBracesURL)
+        let missingBraceErrors = tree3.syntaxErrors.filter { $0.message.contains("expected '}' to end class") }
+        
+        #expect(!missingBraceErrors.isEmpty, "Should find missing brace errors in missing_braces.swift")
+        
+        print("✅ All 'expected X' error positions verified!")
+    }
+    
+    @Test func expressionErrorPositioningAccuracy() throws {
+        // Test specific expression-related errors at exact positions
+        
+        let currentFile = URL(fileURLWithPath: #file)
+        let projectRoot = currentFile.deletingLastPathComponent().deletingLastPathComponent() // Go up to project root (Tests/SAAETests -> Tests -> SAAE root)
+        let expressionErrorsURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/expression_errors.swift")
+        let sourceContent = try String(contentsOf: expressionErrorsURL)
+        let sourceLines = sourceContent.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+        let tree = try SyntaxTree(url: expressionErrorsURL)
+        
+        // Test "expected expression after operator" 
+        let operatorErrors = tree.syntaxErrors.filter { $0.message.contains("expected expression after operator") }
+        #expect(operatorErrors.count >= 1, "Should find operator errors")
+        
+        // Test line 10: "let math = 1 + + 2" - should point after the second "+"
+        let line10Error = operatorErrors.first { $0.location.line == 10 }
+        if let error = line10Error {
+            #expect(error.location.column == 24, "Should point to column 24 after the '+ +' operators")
+            
+            // Verify the line content matches what we expect
+            let actualLine = sourceLines[9] // 0-based index for line 10
+            #expect(actualLine.contains("let math = 1 + + 2"), "Line 10 should contain the invalid operator expression")
+        }
+        
+        // Test "expected ']' to end array"
+        let arrayErrors = tree.syntaxErrors.filter { $0.message.contains("expected ']' to end array") }
+        if let arrayError = arrayErrors.first {
+            let errorLine = sourceLines[arrayError.location.line - 1]
+            #expect(errorLine.contains("["), "Error line should contain array syntax")
+        }
+        
+        // Test "expected '\"' to end string literal"
+        let stringErrors = tree.syntaxErrors.filter { $0.message.contains("expected '\"' to end string literal") }
+        if let stringError = stringErrors.first {
+            let errorLine = sourceLines[stringError.location.line - 1]
+            #expect(errorLine.contains("\""), "Error line should contain string literal")
+        }
+        
+        print("✅ All expression error positions verified!")
+    }
+    
+    @Test func identifierErrorPositioningAccuracy() throws {
+        // Test identifier-related errors
+        
+        let currentFile = URL(fileURLWithPath: #file)
+        let projectRoot = currentFile.deletingLastPathComponent().deletingLastPathComponent() // Go up to project root (Tests/SAAETests -> Tests -> SAAE root)
+        let expressionErrorsURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/expression_errors.swift")
+        let sourceContent = try String(contentsOf: expressionErrorsURL)
+        let sourceLines = sourceContent.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+        let tree = try SyntaxTree(url: expressionErrorsURL)
+        
+        // Test "'$' is not a valid identifier"
+        let dollarErrors = tree.syntaxErrors.filter { $0.message.contains("'$' is not a valid identifier") }
+        if let dollarError = dollarErrors.first {
+            let errorLine = sourceLines[dollarError.location.line - 1]
+            let errorColumn = dollarError.location.column
+            
+            // Verify the '$' character is at the exact reported position
+            let lineStartIndex = errorLine.startIndex
+            let targetIndex = errorLine.index(lineStartIndex, offsetBy: errorColumn - 1) // Convert to 0-based
+            
+            if targetIndex < errorLine.endIndex {
+                let actualChar = errorLine[targetIndex]
+                #expect(actualChar == "$", "Should point exactly to the '$' character at column \(errorColumn)")
+            }
+        }
+        
+        print("✅ All identifier error positions verified!")
+    }
+    
+    @Test func specificKnownErrorPositions() throws {
+        // Test very specific cases with exact expected positions
+        
+        let currentFile = URL(fileURLWithPath: #file)
+        let projectRoot = currentFile.deletingLastPathComponent().deletingLastPathComponent() // Go up to project root (Tests/SAAETests -> Tests -> SAAE root)
+        
+        // Test syntax_confusion.swift line 68: ': <T>(value: T) -> T' error
+        let syntaxConfusionURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/syntax_confusion.swift")
+        let sourceContent = try String(contentsOf: syntaxConfusionURL)
+        let sourceLines = sourceContent.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+        let tree = try SyntaxTree(url: syntaxConfusionURL)
+        
+        // Find the specific error about ': <T>(value: T) -> T'
+        let genericError = tree.syntaxErrors.first { 
+            $0.message.contains(": <T>(value: T) -> T") && $0.message.contains("in function")
+        }
+        
+        #expect(genericError != nil, "Should find the ': <T>(value: T) -> T' error")
+        if let error = genericError {
+            #expect(error.location.line == 68, "Error should be on line 68")
+            #expect(error.location.column == 21, "Error should be at column 21")
+            
+            // Verify the actual line contains this text at that position
+            let line68 = sourceLines[67] // 0-based index
+            let startIndex = line68.index(line68.startIndex, offsetBy: 20) // 0-based column 20
+            let actualText = String(line68[startIndex...])
+            #expect(actualText.hasPrefix(": <T>(value: T) -> T"), "Line 68 column 21 should contain ': <T>(value: T) -> T'")
+        }
+        
+        // Test type_annotations.swift line 12: "expected '=' in variable"
+        let typeAnnotationsURL = projectRoot.appendingPathComponent("Tests/Resources/ErrorSamples/type_annotations.swift")
+        let typeSourceContent = try String(contentsOf: typeAnnotationsURL)
+        let typeSourceLines = typeSourceContent.split(separator: "\n", omittingEmptySubsequences: false).map { String($0) }
+        let typeTree = try SyntaxTree(url: typeAnnotationsURL)
+        
+        let variableError = typeTree.syntaxErrors.first { 
+            $0.message.contains("expected '=' in variable") && $0.location.line == 12
+        }
+        
+        #expect(variableError != nil, "Should find 'expected =' error on line 12")
+        if let error = variableError {
+            #expect(error.location.column == 24, "Error should be at column 24")
+            
+            // Verify line 12 contains "var property2: Int String = 5"
+            let line12 = typeSourceLines[11] // 0-based index
+            #expect(line12.contains("var property2: Int String = 5"), "Line 12 should contain the problematic variable declaration")
+            
+            // Verify column 24 points to "String"
+            let startIndex = line12.index(line12.startIndex, offsetBy: 23) // 0-based column 23
+            let remainingText = String(line12[startIndex...])
+            #expect(remainingText.hasPrefix("String"), "Column 24 should point to 'String'")
+        }
+        
+        print("✅ All specific known error positions verified!")
     }
 } 

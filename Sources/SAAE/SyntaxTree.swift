@@ -50,8 +50,14 @@ public struct SyntaxTree {
         do {
             let string = try String(contentsOf: url)
             self.sourceFile = Parser.parse(source: string)
-            self.sourceLines = string.split(separator: "\n").map { String($0) }
             self.locationConverter = SourceLocationConverter(fileName: url.lastPathComponent, tree: self.sourceFile)
+            
+            // Get lines from SourceLocationConverter and strip any trailing newlines for consistency
+            let rawLines = self.locationConverter.sourceLines
+            self.sourceLines = rawLines.map { line in
+                // Strip trailing newline characters to match our previous string.split behavior
+                return line.trimmingCharacters(in: .newlines)
+            }
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
             throw SAAEError.fileNotFound(url)
         } catch {
@@ -65,8 +71,14 @@ public struct SyntaxTree {
     /// - Throws: SAAEError if code cannot be parsed
     public init(string: String) throws {
         self.sourceFile = Parser.parse(source: string)
-        self.sourceLines = string.split(separator: "\n").map { String($0) }
         self.locationConverter = SourceLocationConverter(fileName: "source.swift", tree: self.sourceFile)
+        
+        // Get lines from SourceLocationConverter and strip any trailing newlines for consistency
+        let rawLines = self.locationConverter.sourceLines
+        self.sourceLines = rawLines.map { line in
+            // Strip trailing newline characters to match our previous string.split behavior
+            return line.trimmingCharacters(in: .newlines)
+        }
     }
     
     // MARK: - Phase 2: Syntax Error Detection
@@ -195,14 +207,14 @@ extension SyntaxErrorDetail {
         
         // Use direct byte offset for more accurate positioning
         let byteOffset = diagnostic.position
-        var computedLocation = converter.location(for: byteOffset)
+        let computedLocation = converter.location(for: byteOffset)
         
         // Apply heuristics to improve error positioning for better UX
-        computedLocation = Self.improveErrorPositioning(
-            originalLocation: computedLocation,
-            message: diagnostic.message,
-            sourceLines: sourceLines
-        )
+        // computedLocation = Self.improveErrorPositioning(
+        //     originalLocation: computedLocation,
+        //     message: diagnostic.message,
+        //     sourceLines: sourceLines
+        // )
         
         self.location = computedLocation
         self.affectedNode = diagnostic.node
@@ -483,6 +495,38 @@ extension SyntaxErrorDetail {
             return originalLocation
         }
         
+        // First check the current line where the error is reported
+        if currentLineIndex < sourceLines.count {
+            let currentLine = sourceLines[currentLineIndex]
+            
+            if currentLine.contains(code) {
+                // Find the position of the problematic code in the line
+                guard let codeRange = currentLine.range(of: code) else {
+                    // Fallback to start of non-whitespace content
+                    let column = currentLine.firstIndex(where: { !$0.isWhitespace }).map { 
+                        currentLine.distance(from: currentLine.startIndex, to: $0) + 1 
+                    } ?? 1
+                    
+                    return SourceLocation(
+                        line: currentLineIndex + 1, // Convert back to 1-based
+                        column: column,
+                        offset: originalLocation.offset,
+                        file: originalLocation.file
+                    )
+                }
+                
+                let column = currentLine.distance(from: currentLine.startIndex, to: codeRange.lowerBound) + 1
+                
+                return SourceLocation(
+                    line: currentLineIndex + 1, // Convert back to 1-based
+                    column: column,
+                    offset: originalLocation.offset,
+                    file: originalLocation.file
+                )
+            }
+        }
+        
+        // Then search backwards if not found on current line
         // Look backwards from current position to find the line containing the problematic code
         var searchLineIndex = currentLineIndex - 1
         let maxSearchLines = 5 // Search a reasonable distance back

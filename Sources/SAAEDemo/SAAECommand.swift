@@ -313,7 +313,12 @@ struct ErrorsCommand: AsyncParsableCommand {
         // Check if reported line looks like an actual error line
         let reportedLine = contextLines[reportedLineIndex].trimmingCharacters(in: .whitespaces)
         
-        // If reported line is empty or just a comment, search nearby lines
+        // If reported line contains substantial content and isn't just a comment, trust SwiftSyntax positioning
+        if !reportedLine.isEmpty && !reportedLine.hasPrefix("//") {
+            return reportedLineIndex
+        }
+        
+        // Only apply heuristics if the reported line is empty or just a comment
         if reportedLine.isEmpty || reportedLine.hasPrefix("//") {
             // Search backwards for a substantial line with potential syntax issues
             for i in stride(from: reportedLineIndex - 1, through: 0, by: -1) {
@@ -332,16 +337,7 @@ struct ErrorsCommand: AsyncParsableCommand {
             }
         }
         
-        // Analyze error message patterns to find the right line
-        if let betterLineIndex = analyzeErrorPatterns(
-            reportedLineIndex: reportedLineIndex,
-            contextLines: contextLines,
-            errorMessage: errorMessage
-        ) {
-            return betterLineIndex
-        }
-        
-        // Default: return reported line index
+        // Default: return reported line index (trust SwiftSyntax)
         return reportedLineIndex
     }
     

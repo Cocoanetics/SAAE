@@ -281,8 +281,8 @@ struct ErrorsCommand: AsyncParsableCommand {
                         let pipeSpaces = String(repeating: " ", count: errorColumnPos)
                         for (i, (kind, msg)) in pointerLines.enumerated() {
                             let isLast = (i == pointerCount - 1)
-                            let branch = isLast ? "└──" : "├──"
-                            let pointerLine = leadingSpaces + " | " + pipeSpaces + branch + " " + (kind == "error" ? "error: " : kind == "note" ? "note: " : "fix-it: ") + msg + "\n"
+                            let branch = isLast ? "┗" : "┣"
+                            let pointerLine = leadingSpaces + " | " + pipeSpaces + branch + "━━ " + (kind == "error" ? "error: " : kind == "note" ? "note: " : "fix-it: ") + msg + "\n"
                             markdown += pointerLine
                         }
                     }

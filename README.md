@@ -16,6 +16,9 @@ swift run SAAEDemo path/to/your/file.swift
 
 # Or analyze multiple files
 swift run SAAEDemo Sources/MyFramework/ --format interface --visibility public
+
+# Check for syntax errors with detailed reporting
+swift run SAAEDemo errors Sources/ --recursive --format markdown
 ```
 
 ## 🎯 Why SAAE for LLMs?
@@ -164,6 +167,159 @@ for url in urls {
 }
 ```
 
+## 🚨 Error Checking & Syntax Validation
+
+SAAE goes beyond just parsing - it provides **advanced error detection and reporting** with precise positioning and helpful fix-it suggestions. Perfect for code validation, CI/CD pipelines, and development tooling.
+
+### Quick Error Checking
+```bash
+# Check syntax errors in a file
+swift run SAAEDemo errors MyFile.swift
+
+# Check entire project with detailed reporting
+swift run SAAEDemo errors Sources/ --recursive --format markdown
+
+# JSON output for CI/CD integration
+swift run SAAEDemo errors Sources/ --format json --show-fixits
+```
+
+### Real-World Error Detection
+
+SAAE detects and precisely locates various Swift syntax errors:
+
+```swift
+// SAAE will detect and report these issues:
+
+func invalidFunc: <T>(value: T) -> T {  // ❌ Syntax error
+    return value
+}
+
+var property: Int String = 5  // ❌ Missing '=' operator
+
+let incomplete = 1 + + 2  // ❌ Invalid operator sequence
+```
+
+**SAAE Error Output:**
+```
+MyFile.swift:3:21: error: unexpected code ': <T>(value: T) -> T' in function
+ 3 |     func invalidFunc: <T>(value: T) -> T {
+   |                     `- error: unexpected code ': <T>(value: T) -> T' in function
+   |                     `- fix-it: remove ': <T>(value: T) -> T'
+
+MyFile.swift:7:24: error: expected '=' in variable
+ 7 |     var property: Int String = 5
+   |                        `- error: expected '=' in variable
+   |                        `- fix-it: insert `= `
+
+MyFile.swift:9:24: error: expected expression after operator
+ 9 |     let incomplete = 1 + + 2
+   |                        `- error: expected expression after operator
+```
+
+### Error Checking Features
+
+#### 🎯 **Precise Positioning**
+- **Exact line and column** positioning for every error
+- **Context-aware reporting** with source line display
+- **Multi-line error context** for complex issues
+
+#### 🔧 **Intelligent Fix-It Suggestions**
+- **Automatic fix recommendations** based on SwiftSyntax analysis
+- **Multi-step fix-its** combined into logical operations
+- **User-friendly descriptions** instead of cryptic compiler internals
+
+#### 📊 **Multiple Output Formats**
+```bash
+# Markdown format (human-readable)
+swift run SAAEDemo errors Sources/ --format markdown
+
+# JSON format (CI/CD integration)
+swift run SAAEDemo errors Sources/ --format json
+
+# YAML format (structured but readable)
+swift run SAAEDemo errors Sources/ --format yaml
+```
+
+#### 🚀 **CI/CD Integration Ready**
+```bash
+# Exit with error code if syntax errors found
+swift run SAAEDemo errors Sources/ --format json
+
+# Use in GitHub Actions, Jenkins, etc.
+if swift run SAAEDemo errors Sources/; then
+    echo "✅ No syntax errors found"
+else
+    echo "❌ Syntax errors detected"
+    exit 1
+fi
+```
+
+### Error Checking API
+
+Use SAAE's error detection programmatically:
+
+```swift
+import SAAE
+
+// Check errors in a file
+let tree = try SyntaxTree(url: URL(fileURLWithPath: "MyFile.swift"))
+let errors = tree.syntaxErrors
+
+// Process each error
+for error in errors {
+    print("Error at \(error.location.line):\(error.location.column)")
+    print("Message: \(error.message)")
+    print("Source: \(error.sourceLineText)")
+    
+    // Check for fix-it suggestions
+    if !error.fixIts.isEmpty {
+        print("Fix-its available:")
+        for fixIt in error.fixIts {
+            print("  - \(fixIt.description)")
+        }
+    }
+}
+
+// Generate comprehensive error report
+let hasErrors = !errors.isEmpty
+let errorReport = errors.map { error in
+    "\(error.location.line):\(error.location.column): \(error.message)"
+}.joined(separator: "\n")
+```
+
+### Advanced Error Detection
+
+SAAE catches sophisticated syntax errors that basic parsers miss:
+
+- **Generic syntax errors** with precise type parameter positioning
+- **Function declaration issues** including parameter list problems  
+- **Variable declaration errors** with missing operators or types
+- **Expression syntax errors** in complex statements
+- **Operator precedence issues** and malformed expressions
+- **Missing braces, brackets, and delimiters** with context
+
+### Why SAAE for Error Checking?
+
+**🎯 Superior Accuracy**
+- Built on SwiftSyntax for **100% Swift-compliant** parsing
+- **Precise character-level positioning** verified by comprehensive tests
+- **Context-aware error messages** that make sense to developers
+
+**⚡ Performance Optimized**
+- **Fast parsing** suitable for real-time validation
+- **Efficient memory usage** for large codebases
+- **Parallel processing** support for multiple files
+
+**🔧 Developer Friendly**
+- **Clear, actionable error messages** without compiler jargon
+- **Visual error context** with source line highlighting
+- **Automated fix suggestions** to speed up debugging
+
+**🚀 Integration Ready**  
+- **Multiple output formats** for different workflows
+- **Exit codes** for CI/CD pipeline integration
+- **Structured data** for custom tooling development
+
 ## 🔧 Installation
 
 Add SAAE as a dependency in your `Package.swift`:
@@ -179,9 +335,17 @@ dependencies: [
 | Format | Best For | Description |
 |--------|----------|-------------|
 | **interface** | 🤖 **LLM Analysis** | Clean Swift interface like Xcode's "Generated Interface" |
-| json | 📱 Programmatic use | Structured data with full metadata |
-| yaml | 👤 Human reading | Structured data, more readable than JSON |
-| markdown | 📖 Documentation | Rich formatting with headers and sections |
+| **json** | 📱 **Programmatic use** | Structured data with full metadata for API analysis |
+| **yaml** | 👤 **Human reading** | Structured data, more readable than JSON |
+| **markdown** | 📖 **Documentation** | Rich formatting with headers and sections |
+| **errors** | 🚨 **Error checking** | Precise syntax error detection with fix-it suggestions |
+
+### Error Checking Formats
+| Format | Use Case | Output |
+|--------|----------|---------|
+| `errors` + `--format markdown` | **Human review** | Formatted error reports with context |
+| `errors` + `--format json` | **CI/CD integration** | Structured error data for automation |
+| `errors` + `--format yaml` | **Configuration** | Readable structured error reports |
 
 ## 🎯 Why Interface Format Beats Full Source?
 
@@ -244,6 +408,18 @@ swift run SAAEDemo Sources/MyModule/ --format interface
 ```bash
 # Generate markdown docs for your API
 swift run SAAEDemo Sources/ --format markdown --visibility public > API_DOCS.md
+```
+
+### For Code Quality
+```bash
+# Validate syntax before commits
+swift run SAAEDemo errors Sources/ --format json
+
+# Generate error reports for review
+swift run SAAEDemo errors Sources/ --recursive --format markdown > error_report.md
+
+# Quick syntax check
+swift run SAAEDemo errors MyChangedFile.swift
 ```
 
 ## 🔧 Requirements

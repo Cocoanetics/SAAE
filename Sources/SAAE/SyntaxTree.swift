@@ -192,7 +192,10 @@ extension SyntaxErrorDetail {
     public init(from diagnostic: Diagnostic, sourceLines: [String], converter: SourceLocationConverter) {
         // Basic diagnostic information
         self.message = diagnostic.message
-        self.location = diagnostic.location(converter: converter)
+        
+        // Use direct byte offset for more accurate positioning
+        let byteOffset = diagnostic.position
+        self.location = converter.location(for: byteOffset)
         self.affectedNode = diagnostic.node
         
         // Extract source line text with bounds checking
@@ -213,11 +216,25 @@ extension SyntaxErrorDetail {
         let endLine = min(sourceLines.count - 1, lineIndex + contextRadius)
         
         var contextLines: [String] = []
-        for i in startLine...endLine {
-            contextLines.append(sourceLines[i])
+        // Ensure startLine <= endLine to avoid range errors
+        if startLine <= endLine && endLine < sourceLines.count {
+            for i in startLine...endLine {
+                contextLines.append(sourceLines[i])
+            }
+        } else if lineIndex >= 0 && lineIndex < sourceLines.count {
+            // Fallback: just include the error line itself
+            contextLines.append(sourceLines[lineIndex])
         }
         self.sourceContext = contextLines
-        self.contextRange = "\(startLine + 1)-\(endLine + 1)" // Convert back to 1-based for display
+        
+        // Calculate range string based on actual context lines used
+        if contextLines.isEmpty {
+            self.contextRange = "0-0" // No valid context
+        } else if contextLines.count == 1 {
+            self.contextRange = "\(lineIndex + 1)" // Just the error line
+        } else {
+            self.contextRange = "\(startLine + 1)-\(endLine + 1)" // Convert back to 1-based for display
+        }
         
         // Process fix-its with SourceLocationConverter
         var fixIts: [SyntaxFixIt] = []

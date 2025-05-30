@@ -113,22 +113,55 @@ swift run SAAEDemo MyFramework/ --visibility private
 
 ## 📦 Library Usage
 
-You can also use SAAE as a library in your own Swift projects:
+You can also use SAAE as a library in your own Swift projects with the clean, direct API:
 
+### Two-Step API Pattern
 ```swift
 import SAAE
 
-// Parse Swift code
-let handle = try parse(from_url: URL(fileURLWithPath: "MyFile.swift"))
+// Step 1: Parse Swift code into a syntax tree
+let tree = try SyntaxTree(url: URL(fileURLWithPath: "MyFile.swift"))
 
-// Generate interface overview
-let interface = try generate_overview(
-    ast_handle: handle,
-    format: .interface,
-    min_visibility: .public
-)
+// Step 2: Create code overview with specific visibility
+let codeOverview = CodeOverview(tree: tree, minVisibility: .public)
 
-print(interface)
+// Generate different formats
+let json = try codeOverview.json()
+let yaml = try codeOverview.yaml() 
+let markdown = codeOverview.markdown()
+let interface = codeOverview.interface()
+
+// Access parsed data directly
+let imports = codeOverview.imports
+let declarations = codeOverview.declarations
+```
+
+### Parse from String
+```swift
+import SAAE
+
+// Parse from Swift source code string
+let tree = try SyntaxTree(string: swiftCode)
+let overview = CodeOverview(tree: tree, minVisibility: .internal)
+let interface = overview.interface()
+```
+
+### Multi-File Analysis
+```swift
+import SAAE
+
+let urls = [
+    URL(fileURLWithPath: "File1.swift"),
+    URL(fileURLWithPath: "File2.swift")
+]
+
+// Analyze each file and combine results
+var allDeclarations: [DeclarationOverview] = []
+for url in urls {
+    let tree = try SyntaxTree(url: url)
+    let overview = CodeOverview(tree: tree, minVisibility: .public)
+    allDeclarations.append(contentsOf: overview.declarations)
+}
 ```
 
 ## 🔧 Installation

@@ -4,16 +4,16 @@ import SwiftSyntax
 /// Visitor class that traverses the AST and extracts declaration information
 internal class DeclarationVisitor: SyntaxVisitor {
     
-    private let minVisibility: SAAE.VisibilityLevel
+    private let minVisibility: VisibilityLevel
     private(set) var declarations: [DeclarationOverview] = []
     
     // Context tracking for path generation and nesting
     private var pathComponents: [Int] = []
     private var currentIndex: Int = 0
     private var parentNames: [String] = []
-    private var parentVisibility: SAAE.VisibilityLevel = .internal
+    private var parentVisibility: VisibilityLevel = .internal
     
-    init(minVisibility: SAAE.VisibilityLevel) {
+    init(minVisibility: VisibilityLevel) {
         self.minVisibility = minVisibility
         super.init(viewMode: .sourceAccurate)
     }
@@ -73,7 +73,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: signature,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
@@ -108,7 +108,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
                     name: name,
                     fullName: fullName,
                     signature: signature,
-                    visibility: visibility.stringValue,
+                    visibility: visibility.rawValue,
                     modifiers: modifiers.isEmpty ? nil : modifiers,
                     attributes: attributes.isEmpty ? nil : attributes,
                     documentation: documentation
@@ -140,7 +140,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: signature,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
@@ -170,7 +170,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: signature,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
@@ -215,7 +215,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
                 name: name,
                 fullName: fullName,
                 signature: signature,
-                visibility: visibility.stringValue,
+                visibility: visibility.rawValue,
                 modifiers: modifiers.isEmpty ? nil : modifiers,
                 attributes: attributes.isEmpty ? nil : attributes,
                 documentation: documentation
@@ -250,7 +250,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: nil, // Container types don't have signatures in this implementation
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
@@ -283,7 +283,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: nil,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation,
@@ -318,7 +318,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
                     name: name,
                     fullName: fullName,
                     signature: signature,
-                    visibility: visibility.stringValue,
+                    visibility: visibility.rawValue,
                     modifiers: modifiers.isEmpty ? nil : modifiers,
                     attributes: attributes.isEmpty ? nil : attributes,
                     documentation: documentation
@@ -350,7 +350,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: signature,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
@@ -380,7 +380,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
             name: name,
             fullName: fullName,
             signature: signature,
-            visibility: visibility.stringValue,
+            visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
             documentation: documentation
@@ -445,7 +445,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return allNames.joined(separator: ".")
     }
     
-    private func extractVisibility<T: SyntaxProtocol>(from node: T) -> SAAE.VisibilityLevel {
+    private func extractVisibility<T: SyntaxProtocol>(from node: T) -> VisibilityLevel {
         // Try to extract modifiers from different declaration types
         var modifiers: DeclModifierListSyntax?
         

@@ -1,146 +1,170 @@
 import Foundation
 
-/// Documentation structure for parsing Swift documentation comments
-internal struct Documentation: Codable {
-    internal let description: String
-    internal let parameters: [String: String]
-    internal let returns: String?
-    internal let throwsInfo: String?
+/// Represents parsed Swift documentation comments with structured information.
+///
+/// This structure parses and organizes Swift documentation comments (both `///` and `/** */` styles)
+/// into separate components for easier consumption and formatting. It extracts descriptions,
+/// parameter documentation, return value information, and throws clauses.
+///
+/// ## Supported Documentation Formats
+///
+/// The parser supports standard Swift documentation patterns:
+/// - Single-line comments with `///`
+/// - Multi-line comments with `/** */`
+/// - Parameter documentation with `- Parameter name: description`
+/// - Parameters list with `- Parameters:` followed by individual parameters
+/// - Return documentation with `- Returns:` or `- Return:`
+/// - Throws documentation with `- Throws:`
+///
+/// ## Example
+///
+/// ```swift
+/// let docText = """
+/// Performs a calculation with the given values.
+/// 
+/// - Parameters:
+///   - x: The first value
+///   - y: The second value
+/// - Returns: The calculated result
+/// - Throws: `CalculationError` if the operation fails
+/// """
+/// let doc = Documentation(from: docText)
+/// print(doc.description) // "Performs a calculation with the given values."
+/// print(doc.parameters["x"]) // "The first value"
+/// ```
+public struct Documentation: Codable {
+    /// The main description text from the documentation comment.
+    ///
+    /// This contains the primary documentation content, excluding parameter lists,
+    /// return information, and throws clauses.
+    public let description: String
     
-    internal init(from text: String) {
-        var description = ""
-        var parameters: [String: String] = [:]
-        var returns: String?
-        var throwsInfo: String?
+    /// A dictionary mapping parameter names to their documentation descriptions.
+    ///
+    /// Keys are parameter names and values are their corresponding documentation strings.
+    public let parameters: [String: String]
+    
+    /// Documentation for the return value, if present.
+    ///
+    /// Contains the text following `- Returns:` or `- Return:` in the documentation comment.
+    public let returns: String?
+    
+    /// Documentation for what the function or method can throw, if present.
+    ///
+    /// Contains the text following `- Throws:` in the documentation comment.
+    public let throwsInfo: String?
+    
+    /// Parses a documentation comment string into structured components.
+    ///
+    /// This initializer processes various Swift documentation comment formats and extracts
+    /// structured information including descriptions, parameters, return values, and throws information.
+    ///
+    /// - Parameter text: The raw documentation comment text to parse.
+    ///
+    /// ## Parsing Logic
+    ///
+    /// The parser:
+    /// 1. Removes comment prefixes (`///`, `/**`, `*/`, `*`)
+    /// 2. Identifies section markers (`- Parameter`, `- Parameters:`, `- Returns:`, `- Throws:`)
+    /// 3. Groups content into appropriate sections
+    /// 4. Handles both inline parameter documentation and parameter lists
+    public init(from text: String) {
+        var _ = ""
+        var params: [String: String] = [:]
+        var returnValue: String?
+        var throwsValue: String?
         
         let lines = text.components(separatedBy: .newlines)
-        var currentSection: String?
-        var currentContent = ""
+        var currentSection: DocumentationSection = .description
+        var descriptionLines: [String] = []
         
         for line in lines {
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // Skip empty lines and comment-only lines
-            if trimmedLine.isEmpty || trimmedLine == "*" || trimmedLine == "/**" || trimmedLine == "*/" {
-                continue
-            }
-            
-            // Remove common documentation comment prefixes
-            var cleanLine = trimmedLine
-                .replacingOccurrences(of: "^///\\s*", with: "", options: .regularExpression)
+            // Remove comment prefixes
+            let cleaned = trimmed.replacingOccurrences(of: "^///\\s*", with: "", options: .regularExpression)
                 .replacingOccurrences(of: "^\\*\\s*", with: "", options: .regularExpression)
                 .replacingOccurrences(of: "^/\\*\\*\\s*", with: "", options: .regularExpression)
-                .replacingOccurrences(of: "\\*/$", with: "", options: .regularExpression)
+                .replacingOccurrences(of: "\\*/\\s*$", with: "", options: .regularExpression)
             
-            // Additional cleanup for block comments - remove leading/trailing /** and */
-            cleanLine = cleanLine
-                .replacingOccurrences(of: "^/\\*\\*", with: "", options: .regularExpression)
-                .replacingOccurrences(of: "\\*/$", with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Skip if the line is now empty after cleaning
-            if cleanLine.isEmpty {
+            if cleaned.isEmpty {
                 continue
             }
             
-            if cleanLine.hasPrefix("- Parameter ") || cleanLine.hasPrefix("- parameter ") {
-                // Save previous section
-                if let section = currentSection {
-                    switch section {
-                    case "description":
-                        description = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                    case "returns":
-                        returns = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                    case "throws":
-                        throwsInfo = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                    default:
-                        if section.hasPrefix("parameter:") {
-                            let paramName = String(section.dropFirst("parameter:".count))
-                            parameters[paramName] = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                        }
+            if cleaned.hasPrefix("- Parameter ") {
+                currentSection = .parameters
+                let paramLine = String(cleaned.dropFirst("- Parameter ".count))
+                if let colonIndex = paramLine.firstIndex(of: ":") {
+                    let paramName = String(paramLine[..<colonIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let paramDesc = String(paramLine[paramLine.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    params[paramName] = paramDesc
+                }
+            } else if cleaned.hasPrefix("- Parameters:") {
+                currentSection = .parameters
+            } else if cleaned.hasPrefix("- Returns:") || cleaned.hasPrefix("- Return:") {
+                currentSection = .returns
+                let returnLine = cleaned.replacingOccurrences(of: "^- Returns?:\\s*", with: "", options: .regularExpression)
+                if !returnLine.isEmpty {
+                    returnValue = returnLine
+                }
+            } else if cleaned.hasPrefix("- Throws:") {
+                currentSection = .throwsSection
+                let throwsLine = cleaned.replacingOccurrences(of: "^- Throws:\\s*", with: "", options: .regularExpression)
+                if !throwsLine.isEmpty {
+                    throwsValue = throwsLine
+                }
+            } else if cleaned.hasPrefix("- ") && currentSection == .parameters {
+                // Handle parameter in list format: "- paramName: description"
+                let paramLine = String(cleaned.dropFirst("- ".count))
+                if let colonIndex = paramLine.firstIndex(of: ":") {
+                    let paramName = String(paramLine[..<colonIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let paramDesc = String(paramLine[paramLine.index(after: colonIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    params[paramName] = paramDesc
+                }
+            } else {
+                switch currentSection {
+                case .description:
+                    descriptionLines.append(cleaned)
+                case .returns:
+                    if returnValue == nil {
+                        returnValue = cleaned
+                    } else {
+                        returnValue! += " " + cleaned
+                    }
+                case .throwsSection:
+                    if throwsValue == nil {
+                        throwsValue = cleaned
+                    } else {
+                        throwsValue! += " " + cleaned
+                    }
+                case .parameters:
+                    // Continue description if we haven't hit a parameter marker
+                    if !cleaned.hasPrefix("- ") {
+                        descriptionLines.append(cleaned)
+                        currentSection = .description
                     }
                 }
-                
-                // Parse parameter
-                let parameterContent = cleanLine.replacingOccurrences(of: "^- [Pp]arameter\\s+", with: "", options: .regularExpression)
-                if let colonIndex = parameterContent.firstIndex(of: ":") {
-                    let paramName = String(parameterContent[..<colonIndex]).trimmingCharacters(in: .whitespaces)
-                    let paramDesc = String(parameterContent[parameterContent.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
-                    parameters[paramName] = paramDesc
-                }
-                currentSection = nil
-                currentContent = ""
-            } else if cleanLine.hasPrefix("- Parameters:") || cleanLine.hasPrefix("- parameters:") {
-                // Save previous section
-                if currentSection == "description" {
-                    description = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                
-                currentSection = "parameters"
-                currentContent = ""
-            } else if cleanLine.hasPrefix("- Returns:") || cleanLine.hasPrefix("- returns:") {
-                // Save previous section
-                if currentSection == "description" {
-                    description = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                } else if currentSection == "throws" {
-                    throwsInfo = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                
-                currentSection = "returns"
-                currentContent = cleanLine.replacingOccurrences(of: "^- [Rr]eturns:\\s*", with: "", options: .regularExpression)
-            } else if cleanLine.hasPrefix("- Throws:") || cleanLine.hasPrefix("- throws:") {
-                // Save previous section
-                if currentSection == "description" {
-                    description = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                } else if currentSection == "returns" {
-                    returns = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                
-                currentSection = "throws"
-                currentContent = cleanLine.replacingOccurrences(of: "^- [Tt]hrows:\\s*", with: "", options: .regularExpression)
-            } else if currentSection == "parameters" && (cleanLine.hasPrefix("- ") && cleanLine.contains(":")) {
-                // Handle individual parameter entries under Parameters section
-                let parameterContent = cleanLine.replacingOccurrences(of: "^-\\s+", with: "", options: .regularExpression)
-                if let colonIndex = parameterContent.firstIndex(of: ":") {
-                    let paramName = String(parameterContent[..<colonIndex]).trimmingCharacters(in: .whitespaces)
-                    let paramDesc = String(parameterContent[parameterContent.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
-                    parameters[paramName] = paramDesc
-                }
-            } else if !cleanLine.isEmpty {
-                if currentSection == nil {
-                    currentSection = "description"
-                }
-                
-                if !currentContent.isEmpty {
-                    currentContent += "\n"
-                }
-                currentContent += cleanLine
             }
         }
         
-        // Save final section
-        if let section = currentSection {
-            switch section {
-            case "description":
-                description = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            case "returns":
-                returns = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            case "throws":
-                throwsInfo = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            case "parameters":
-                // Parameters section - individual parameters should already be parsed
-                break
-            default:
-                if section.hasPrefix("parameter:") {
-                    let paramName = String(section.dropFirst("parameter:".count))
-                    parameters[paramName] = currentContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            }
-        }
-        
-        self.description = description
-        self.parameters = parameters
-        self.returns = returns?.isEmpty == true ? nil : returns
-        self.throwsInfo = throwsInfo?.isEmpty == true ? nil : throwsInfo
+        self.description = descriptionLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        self.parameters = params
+        self.returns = returnValue
+        self.throwsInfo = throwsValue
     }
+}
+
+/// Internal enumeration for tracking the current parsing section.
+private enum DocumentationSection {
+    /// Currently parsing the main description text.
+    case description
+    
+    /// Currently parsing parameter documentation.
+    case parameters
+    
+    /// Currently parsing return value documentation.
+    case returns
+    
+    /// Currently parsing throws documentation.
+    case throwsSection
 } 

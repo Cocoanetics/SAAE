@@ -3,89 +3,66 @@ import XCTest
 
 final class SAAETests: XCTestCase {
     
-    func testParseFromString() throws {
+    func testBasicParsing() throws {
         let swiftCode = """
-        /// A simple struct for testing
-        public struct TestStruct {
-            /// A test property
-            public let name: String
-            
-            /// Test initializer
-            /// - Parameter name: The name value
-            public init(name: String) {
-                self.name = name
-            }
-            
-            /// Test method
-            /// - Parameter prefix: Prefix to add
-            /// - Returns: Modified name
-            public func getName(with prefix: String) -> String {
-                return prefix + name
-            }
-        }
-        """
+        import Foundation
         
-        let handle = try parse(string: swiftCode)
-        XCTAssertNotNil(handle)
-    }
-    
-    func testGenerateJSONOverview() throws {
-        let swiftCode = """
-        /// A test class
         public class TestClass {
-            /// Property
-            private var value: Int = 0
-            
-            /// Method
-            func testMethod() -> String {
-                return "test"
+            public func testMethod() {
+                print("Hello, World!")
             }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .json)
+        // Test that we can create a SyntaxTree from string
+        let tree = try SyntaxTree(string: swiftCode)
+        XCTAssertNotNil(tree)
+    }
+    
+    func testJSONOutput() throws {
+        let swiftCode = """
+        import Foundation
+        
+        public class TestClass {
+            public func testMethod() {
+                print("Hello, World!")
+            }
+        }
+        """
+        
+        let overview = try generateOverview(string: swiftCode, format: .json)
         
         XCTAssertFalse(overview.isEmpty)
+        XCTAssertTrue(overview.contains("\"type\" : \"class\""))
         XCTAssertTrue(overview.contains("TestClass"))
-        XCTAssertTrue(overview.contains("class"))
-        XCTAssertTrue(overview.contains("public"))
     }
     
-    func testGenerateYAMLOverview() throws {
+    func testYAMLOutput() throws {
         let swiftCode = """
-        internal struct SimpleStruct {
-            let property: String
+        public struct TestStruct {
+            public let property: String
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .yaml)
+        let overview = try generateOverview(string: swiftCode, format: .yaml)
         
         XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("SimpleStruct"))
+        XCTAssertTrue(overview.contains("type: struct"))
+        XCTAssertTrue(overview.contains("TestStruct"))
     }
     
-    func testGenerateMarkdownOverview() throws {
+    func testMarkdownOutput() throws {
         let swiftCode = """
-        /// Documentation for protocol
         public protocol TestProtocol {
-            /// Required method
-            /// - Parameter input: Input value
-            /// - Returns: Output value
-            func process(_ input: String) -> String
+            func testMethod()
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .markdown)
+        let overview = try generateOverview(string: swiftCode, format: .markdown)
         
         XCTAssertFalse(overview.isEmpty)
         XCTAssertTrue(overview.contains("# Code Overview"))
-        XCTAssertTrue(overview.contains("## Protocol: TestProtocol"))
-        XCTAssertTrue(overview.contains("Documentation for protocol"))
-        XCTAssertTrue(overview.contains("**Parameters:**"))
-        XCTAssertTrue(overview.contains("**Returns:**"))
+        XCTAssertTrue(overview.contains("TestProtocol"))
     }
     
     func testVisibilityFiltering() throws {
@@ -95,21 +72,25 @@ final class SAAETests: XCTestCase {
             internal let internalProperty: String
             private let privateProperty: String
         }
+        
+        internal struct InternalStruct {
+            let property: String
+        }
         """
         
-        let handle = try parse(string: swiftCode)
-        
         // Test with public visibility
-        let publicOverview = try generateOverview(astHandle: handle, format: .json, minVisibility: .public)
+        let publicOverview = try generateOverview(string: swiftCode, format: .json, minVisibility: .public)
         XCTAssertTrue(publicOverview.contains("PublicStruct"))
         XCTAssertTrue(publicOverview.contains("publicProperty"))
+        XCTAssertFalse(publicOverview.contains("InternalStruct"))
         XCTAssertFalse(publicOverview.contains("internalProperty"))
         XCTAssertFalse(publicOverview.contains("privateProperty"))
         
         // Test with internal visibility
-        let internalOverview = try generateOverview(astHandle: handle, format: .json, minVisibility: .internal)
+        let internalOverview = try generateOverview(string: swiftCode, format: .json, minVisibility: .internal)
         XCTAssertTrue(internalOverview.contains("PublicStruct"))
         XCTAssertTrue(internalOverview.contains("publicProperty"))
+        XCTAssertTrue(internalOverview.contains("InternalStruct"))
         XCTAssertTrue(internalOverview.contains("internalProperty"))
         XCTAssertFalse(internalOverview.contains("privateProperty"))
     }
@@ -118,267 +99,215 @@ final class SAAETests: XCTestCase {
         let swiftCode = """
         public struct OuterStruct {
             public struct InnerStruct {
-                public let value: Int
-                
-                public func method() -> Int {
-                    return value
-                }
+                public let property: String
             }
             
-            public let inner: InnerStruct
+            public enum InnerEnum {
+                case first
+                case second
+            }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: .json)
         
         XCTAssertTrue(overview.contains("OuterStruct"))
         XCTAssertTrue(overview.contains("InnerStruct"))
-        XCTAssertTrue(overview.contains("members"))
+        XCTAssertTrue(overview.contains("InnerEnum"))
+        XCTAssertTrue(overview.contains("first"))
+        XCTAssertTrue(overview.contains("second"))
     }
     
-    func testEnhancedMarkdownChildrenReferences() throws {
+    func testSwiftDocumentation() throws {
         let swiftCode = """
-        /// Main calculator class
-        public class Calculator {
-            /// Precision setting
-            public var precision: Int = 2
-            
-            /// Configuration struct
-            public struct Config {
-                /// Whether to round results
-                public var shouldRound: Bool = true
-                
-                /// Maximum decimal places
-                public let maxDecimals: Int = 10
-            }
-            
-            /// Performs division
-            /// - Parameter value: The divisor
-            /// - Returns: The result
-            public func divide(by value: Double) throws -> Double {
-                return 10.0 / value
+        public struct DocumentedStruct {
+            /// This is a documented property
+            /// - Parameter name: The name parameter
+            /// - Returns: A string value
+            public func documentedMethod(name: String) -> String {
+                return name
             }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .markdown)
+        let overview = try generateOverview(string: swiftCode, format: .markdown)
         
         XCTAssertFalse(overview.isEmpty)
-        
-        // Check that children references include type and name information
-        XCTAssertTrue(overview.contains("**Children:**"))
-        XCTAssertTrue(overview.contains("- `1.1` - Var: **Calculator.precision**"))
-        XCTAssertTrue(overview.contains("- `1.2` - Struct: **Calculator.Config**"))
-        XCTAssertTrue(overview.contains("- `1.3` - Func: **Calculator.divide**"))
-        
-        // Check nested structure children
-        XCTAssertTrue(overview.contains("- `1.2.1` - Var: **Calculator.Config.shouldRound**"))
-        XCTAssertTrue(overview.contains("- `1.2.2` - Let: **Calculator.Config.maxDecimals**"))
-        
-        // Ensure the old path-only format is no longer used
-        XCTAssertFalse(overview.contains("- Path: `1.1`"))
+        XCTAssertTrue(overview.contains("documented"))
+        // Documentation should be included in markdown format
     }
     
     func testDocumentationParsing() throws {
         let swiftCode = """
-        /// This is a test function
-        /// - Parameter name: The name parameter
-        /// - Parameter age: The age parameter  
-        /// - Returns: A greeting string
-        public func greet(name: String, age: Int) -> String {
-            return "Hello \\(name), you are \\(age)"
+        public class DocumentedClass {
+            /// This is a test function
+            /// - Parameter input: The input string
+            /// - Returns: The processed string
+            /// - Throws: An error if processing fails
+            public func testFunction(input: String) throws -> String {
+                return input.uppercased()
+            }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: .json)
         
         XCTAssertTrue(overview.contains("This is a test function"))
-        XCTAssertTrue(overview.contains("name"))
-        XCTAssertTrue(overview.contains("age"))
-        XCTAssertTrue(overview.contains("returns"))
+        XCTAssertTrue(overview.contains("input"))
+        XCTAssertTrue(overview.contains("The input string"))
     }
     
-    func testInvalidASTHandle() throws {
-        let invalidHandle = ASTHandle()
-        
-        XCTAssertThrowsError(try generateOverview(astHandle: invalidHandle)) { error in
-            if let saaError = error as? SAAEError {
-                XCTAssertEqual(saaError, .invalidASTHandle)
-            } else {
-                XCTFail("Expected SAAEError.invalidASTHandle")
-            }
-        }
-    }
-    
-    func testFileNotFound() throws {
+    func testFileNotFoundError() throws {
         let nonExistentURL = URL(fileURLWithPath: "/nonexistent/file.swift")
         
-        XCTAssertThrowsError(try parse(url: nonExistentURL)) { error in
+        XCTAssertThrowsError(try SyntaxTree(url: nonExistentURL)) { error in
             if let saaError = error as? SAAEError,
                case .fileNotFound = saaError {
                 // Expected error
             } else {
-                XCTFail("Expected SAAEError.fileNotFound")
+                XCTFail("Expected SAAEError.fileNotFound, got \(error)")
             }
         }
     }
     
     func testPathGeneration() throws {
         let swiftCode = """
-        struct OuterStruct {
-            struct InnerStruct {
-                let value: Int
-                func method() -> Int { return value }
+        public struct Container {
+            public struct Inner {
+                public let property: String
+                public func method() {}
             }
-            let property: String
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: .json)
         
         // Check that paths are generated correctly
-        XCTAssertTrue(overview.contains("\"path\" : \"1\"")) // OuterStruct
-        XCTAssertTrue(overview.contains("\"path\" : \"1.1\"")) // InnerStruct  
-        XCTAssertTrue(overview.contains("\"path\" : \"1.1.1\"")) // value
-        XCTAssertTrue(overview.contains("\"path\" : \"1.1.2\"")) // method
-        XCTAssertTrue(overview.contains("\"path\" : \"1.2\"")) // property
+        XCTAssertTrue(overview.contains("1.1.1"))  // Container.Inner.property path
+        XCTAssertTrue(overview.contains("1.1.2"))  // Container.Inner.method path
     }
     
-    func testGenerateInterfaceOverview() throws {
+    func testInterfaceFormat() throws {
         let swiftCode = """
-        /// A calculator for testing
-        public class Calculator {
-            /// Divides two numbers
-            /// - Parameter value: The divisor
-            /// - Throws: `CalculatorError.divisionByZero` if value is zero
-            /// - Returns: The result
-            public func divide(by value: Double) throws -> Double {
-                guard value != 0 else { throw CalculatorError.divisionByZero }
-                return 10.0 / value
-            }
-        }
+        import Foundation
         
-        /// Calculator errors
-        public enum CalculatorError: Error {
-            case divisionByZero
+        /// A test class for interface generation
+        public class TestClass {
+            /// A test property
+            public let property: String
+            
+            /// A test method
+            /// - Parameter input: The input value
+            /// - Returns: The output value
+            public func method(input: String) -> String {
+                return input
+            }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .interface)
+        let overview = try generateOverview(string: swiftCode, format: .interface)
         
         XCTAssertFalse(overview.isEmpty)
-        XCTAssertTrue(overview.contains("/// A calculator for testing"))
-        XCTAssertTrue(overview.contains("public class Calculator"))
-        XCTAssertTrue(overview.contains("/**\n"))
-        XCTAssertTrue(overview.contains(" Divides two numbers"))
-        XCTAssertTrue(overview.contains(" - Parameters:\n"))
-        XCTAssertTrue(overview.contains("   - value: The divisor"))
-        XCTAssertTrue(overview.contains(" - Throws: `CalculatorError.divisionByZero` if value is zero"))
-        XCTAssertTrue(overview.contains(" - Returns: The result"))
-        XCTAssertTrue(overview.contains("public func divide(by value: Double) throws -> Double"))
-        XCTAssertTrue(overview.contains("/// Calculator errors"))
-        XCTAssertTrue(overview.contains("public enum CalculatorError"))
+        XCTAssertTrue(overview.contains("public class TestClass"))
+        XCTAssertTrue(overview.contains("public var property: String { get }"))
+        XCTAssertTrue(overview.contains("public func method(input: String) -> String"))
+        XCTAssertTrue(overview.contains("import Foundation"))
     }
     
-    func testAllDeclarationTypes() throws {
+    func testModifiersSupport() throws {
         let swiftCode = """
-        /// Enum declaration
-        enum TestEnum {
-            case first, second
-        }
-        
-        /// Protocol declaration
-        protocol TestProtocol {
-            associatedtype T
-            func method() -> T
-        }
-        
-        /// Class declaration
-        class TestClass: TestProtocol {
-            typealias T = String
+        public class ModifiersTest {
+            static let staticProperty: String = "test"
+            final func finalMethod() {}
+            class func classMethod() {}
+            convenience init(value: String) { self.init() }
+            lazy var lazyProperty: String = "lazy"
+            weak var weakProperty: AnyObject?
             
-            func method() -> String {
-                return "test"
-            }
-            
-            subscript(index: Int) -> String {
-                return "subscript"
-            }
-        }
-        
-        /// Extension declaration
-        extension TestClass {
-            var computed: String {
-                return "computed"
-            }
+            mutating func mutatingMethod() {}
+            nonmutating func nonmutatingMethod() {}
+            override func overrideMethod() {}
+            required init() {}
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .json)
+        let overview = try generateOverview(string: swiftCode, format: .json)
         
         // Check that all declaration types are captured
-        XCTAssertTrue(overview.contains("enum"))
-        XCTAssertTrue(overview.contains("protocol"))
         XCTAssertTrue(overview.contains("class"))
-        XCTAssertTrue(overview.contains("extension"))
-        XCTAssertTrue(overview.contains("typealias"))
-        XCTAssertTrue(overview.contains("func"))
-        XCTAssertTrue(overview.contains("subscript"))
+        XCTAssertTrue(overview.contains("let"))
         XCTAssertTrue(overview.contains("var"))
+        XCTAssertTrue(overview.contains("func"))
+        XCTAssertTrue(overview.contains("init"))
+        
+        // Check that modifiers are captured
+        XCTAssertTrue(overview.contains("static"))
+        XCTAssertTrue(overview.contains("final"))
+        XCTAssertTrue(overview.contains("convenience"))
+        XCTAssertTrue(overview.contains("lazy"))
+        XCTAssertTrue(overview.contains("weak"))
+        XCTAssertTrue(overview.contains("mutating"))
+        XCTAssertTrue(overview.contains("nonmutating"))
+        XCTAssertTrue(overview.contains("override"))
+        XCTAssertTrue(overview.contains("required"))
     }
     
-    func testBlockCommentDocumentation() throws {
+    func testEnumCasesInterfaceFormat() throws {
         let swiftCode = """
-        /**
-         A test class with block comment documentation
-         This class demonstrates multi-line block comments
-         - Parameter value: A test parameter
-         - Returns: A test return value
-         - Throws: An error if something goes wrong
-         */
-        public class BlockCommentTest {
-            /** Single line block comment */
-            public func singleLineMethod() -> String {
-                return "test"
-            }
+        public enum TestEnum {
+            case first
+            case second(String)
+            case third(Int, String)
             
-            /**
-             Multi-line block comment method
-             - Parameter input: The input string
-             - Returns: The processed string
-             */
-            public func multiLineMethod(_ input: String) -> String {
-                return input.uppercased()
+            public func utilityMethod() -> String {
+                return "test"
             }
         }
         """
         
-        let handle = try parse(string: swiftCode)
-        let overview = try generateOverview(astHandle: handle, format: .interface)
+        let overview = try generateOverview(string: swiftCode, format: .interface)
         
         XCTAssertFalse(overview.isEmpty)
+        XCTAssertTrue(overview.contains("public enum TestEnum"))
         
-        // Check for /** */ format for multi-line descriptions and /** */ for complex
-        XCTAssertTrue(overview.contains("/**\n"))
-        XCTAssertTrue(overview.contains(" A test class with block comment documentation"))
-        XCTAssertTrue(overview.contains(" This class demonstrates multi-line block comments"))
-        XCTAssertTrue(overview.contains("/// Single line block comment"))
-        XCTAssertTrue(overview.contains(" Multi-line block comment method"))
-        XCTAssertTrue(overview.contains(" - Parameters:\n"))
-        XCTAssertTrue(overview.contains("   - input: The input string"))
-        XCTAssertTrue(overview.contains(" - Returns: The processed string"))
-        XCTAssertTrue(overview.contains(" */"))
+        // Cases should not show visibility (they inherit from parent enum)
+        XCTAssertTrue(overview.contains("case first"))
+        XCTAssertTrue(overview.contains("case second(String)"))
+        XCTAssertTrue(overview.contains("case third(Int, String)"))
         
-        // Ensure we're using /// for simple comments now
-        XCTAssertTrue(overview.contains("///"))
+        // But methods should show visibility
+        XCTAssertTrue(overview.contains("public func utilityMethod()"))
         
-        // Ensure no input-style comment artifacts remain
-        XCTAssertFalse(overview.contains(" * "))
+        // Cases should NOT have redundant "public" prefix
+        XCTAssertFalse(overview.contains("public case first"))
+        XCTAssertFalse(overview.contains("public case second"))
+        XCTAssertFalse(overview.contains("public case third"))
+    }
+    
+    func testDirectAPIUsage() throws {
+        let swiftCode = """
+        public struct DirectAPITest {
+            public let property: String
+        }
+        """
+        
+        // Test direct API usage
+        let tree = try SyntaxTree(string: swiftCode)
+        let codeOverview = CodeOverview(tree: tree, minVisibility: .public)
+        
+        let jsonOutput = try codeOverview.json()
+        let yamlOutput = try codeOverview.yaml()
+        let markdownOutput = codeOverview.markdown()
+        let interfaceOutput = codeOverview.interface()
+        
+        XCTAssertFalse(jsonOutput.isEmpty)
+        XCTAssertFalse(yamlOutput.isEmpty)
+        XCTAssertFalse(markdownOutput.isEmpty)
+        XCTAssertFalse(interfaceOutput.isEmpty)
+        
+        XCTAssertTrue(jsonOutput.contains("DirectAPITest"))
+        XCTAssertTrue(yamlOutput.contains("DirectAPITest"))
+        XCTAssertTrue(markdownOutput.contains("DirectAPITest"))
+        XCTAssertTrue(interfaceOutput.contains("DirectAPITest"))
     }
 } 

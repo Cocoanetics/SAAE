@@ -3,117 +3,214 @@ import SwiftSyntax
 import SwiftParser
 import Yams
 
-/// Main SAAE class for parsing Swift code and generating overviews
+/// The main SAAE (Swift AST Abstractor & Editor) class for analyzing Swift source code.
+///
+/// SAAE provides a comprehensive interface for parsing Swift source files and generating
+/// structured overviews in multiple formats. It abstracts the complexity of SwiftSyntax
+/// and provides convenient methods for common code analysis tasks.
+///
+/// ## Overview
+///
+/// The SAAE class supports:
+/// - Single-file analysis from URLs or strings
+/// - Multi-file analysis for entire projects
+/// - Multiple output formats (JSON, YAML, Markdown, Interface)
+/// - Configurable visibility filtering
+/// - Comprehensive error handling
+///
+/// ## Basic Usage
+///
+/// ```swift
+/// let saae = SAAE()
+/// 
+/// // Analyze a single file
+/// let overview = try saae.generateOverview(
+///     url: fileURL,
+///     format: .markdown,
+///     minVisibility: .public
+/// )
+/// 
+/// // Analyze multiple files
+/// let multiFileOverview = try saae.generateMultiFileOverview(
+///     urls: [file1URL, file2URL],
+///     format: .json,
+///     minVisibility: .internal
+/// )
+/// ```
+///
+/// ## Output Formats
+///
+/// - **JSON**: Structured data for programmatic consumption
+/// - **YAML**: Human-readable structured data
+/// - **Markdown**: Documentation-friendly format
+/// - **Interface**: Swift-like interface declarations
 public class SAAE {
     
-    // Internal storage for parsed ASTs
-    private var astStorage: [UUID: SourceFileSyntax] = [:]
-    
+    /// Creates a new SAAE instance.
+    ///
+    /// The initializer sets up the SAAE instance ready for code analysis.
+    /// No additional configuration is required after initialization.
     public init() {}
     
-    /// Parse Swift code from a file URL
-    /// - Parameter url: URL pointing to a local Swift source file
-    /// - Returns: AST handle for the parsed code
-    /// - Throws: SAAEError if file cannot be read or parsed
-    public func parse(url: URL) throws -> ASTHandle {
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw SAAEError.fileNotFound(url)
-        }
-        
-        let codeString: String
-        do {
-            codeString = try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            throw SAAEError.fileReadError(url, error)
-        }
-        
-        return try parse(string: codeString)
-    }
-    
-    /// Parse Swift code from a string
-    /// - Parameter string: String containing Swift source code
-    /// - Returns: AST handle for the parsed code
-    /// - Throws: SAAEError if code cannot be parsed
-    public func parse(string: String) throws -> ASTHandle {
-        let sourceFile = Parser.parse(source: string)
-        
-        let handle = ASTHandle()
-        astStorage[handle.id] = sourceFile
-        return handle
-    }
-    
-    /// Generate an overview of declarations in the parsed AST
+    /// Analyzes Swift code from a file and generates an overview in the specified format.
+    ///
+    /// This method reads and parses a Swift source file, analyzes its declarations,
+    /// and generates a formatted overview based on the specified parameters.
+    ///
     /// - Parameters:
-    ///   - astHandle: The AST handle obtained from a parse operation
-    ///   - format: Output format (.json, .yaml, .markdown, .interface)
-    ///   - minVisibility: Minimum visibility level to include
-    /// - Returns: String containing the generated overview
-    /// - Throws: SAAEError if AST handle is invalid
+    ///   - url: A file URL pointing to a local Swift source file to analyze.
+    ///   - format: The desired output format for the generated overview.
+    ///   - minVisibility: The minimum visibility level to include in the analysis.
+    ///     Only declarations with this visibility level or higher will be included.
+    ///
+    /// - Returns: A string containing the generated overview in the specified format.
+    ///
+    /// - Throws:
+    ///   - ``SAAEError/fileNotFound(_:)`` if the specified file doesn't exist.
+    ///   - ``SAAEError/fileReadError(_:_:)`` if the file cannot be read.
+    ///   - Encoding errors if the output format cannot be generated.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let saae = SAAE()
+    /// let fileURL = URL(fileURLWithPath: "MyClass.swift")
+    /// let overview = try saae.generateOverview(
+    ///     url: fileURL,
+    ///     format: .markdown,
+    ///     minVisibility: .public
+    /// )
+    /// print(overview)
+    /// ```
     public func generateOverview(
-        astHandle: ASTHandle,
+        url: URL,
         format: OutputFormat = .json,
-        minVisibility: SAAE.VisibilityLevel = .internal
+        minVisibility: VisibilityLevel = .internal
     ) throws -> String {
-        guard let sourceFile = astStorage[astHandle.id] else {
-            throw SAAEError.invalidASTHandle
-        }
-        
-        // Collect imports first
-        let importVisitor = ImportVisitor()
-        importVisitor.walk(sourceFile)
-        let imports = importVisitor.imports
-        
-        let visitor = DeclarationVisitor(minVisibility: minVisibility)
-        visitor.walk(sourceFile)
-        
-        let overviews = visitor.declarations
-        let codeOverview = CodeOverview(imports: imports.sorted(), declarations: overviews)
+        let tree = try SyntaxTree(url: url)
+        let overview = CodeOverview(tree: tree, minVisibility: minVisibility)
         
         switch format {
         case .json:
-            return try generateJSONOutput(codeOverview)
+            return try overview.json()
         case .yaml:
-            return try generateYAMLOutput(codeOverview)
+            return try overview.yaml()
         case .markdown:
-            return generateMarkdownOutput(codeOverview)
+            return overview.markdown()
         case .interface:
-            return generateInterfaceOutput(overviews, imports: imports)
+            return overview.interface()
         }
     }
     
-    /// Generate an overview of declarations in multiple parsed ASTs
+    /// Analyzes Swift code from a string and generates an overview in the specified format.
+    ///
+    /// This method parses Swift source code provided as a string, analyzes its declarations,
+    /// and generates a formatted overview. This is useful for analyzing dynamically generated
+    /// code or code snippets.
+    ///
     /// - Parameters:
-    ///   - astHandlesWithPaths: Array of tuples containing AST handles and their file paths
-    ///   - format: Output format (.json, .yaml, .markdown, .interface)
-    ///   - minVisibility: Minimum visibility level to include
-    /// - Returns: String containing the generated overview
-    /// - Throws: SAAEError if any AST handle is invalid
-    public func generateMultiFileOverview(
-        astHandlesWithPaths: [(handle: ASTHandle, path: String)],
+    ///   - string: A string containing valid Swift source code to analyze.
+    ///   - format: The desired output format for the generated overview.
+    ///   - minVisibility: The minimum visibility level to include in the analysis.
+    ///     Only declarations with this visibility level or higher will be included.
+    ///
+    /// - Returns: A string containing the generated overview in the specified format.
+    ///
+    /// - Throws: Encoding errors if the output format cannot be generated.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let sourceCode = """
+    /// public class Calculator {
+    ///     public func add(_ a: Int, _ b: Int) -> Int {
+    ///         return a + b
+    ///     }
+    /// }
+    /// """
+    /// 
+    /// let saae = SAAE()
+    /// let overview = try saae.generateOverview(
+    ///     string: sourceCode,
+    ///     format: .interface,
+    ///     minVisibility: .public
+    /// )
+    /// ```
+    public func generateOverview(
+        string: String,
         format: OutputFormat = .json,
-        minVisibility: SAAE.VisibilityLevel = .internal
+        minVisibility: VisibilityLevel = .internal
+    ) throws -> String {
+        let tree = try SyntaxTree(string: string)
+        let overview = CodeOverview(tree: tree, minVisibility: minVisibility)
+        
+        switch format {
+        case .json:
+            return try overview.json()
+        case .yaml:
+            return try overview.yaml()
+        case .markdown:
+            return overview.markdown()
+        case .interface:
+            return overview.interface()
+        }
+    }
+    
+    /// Generates a comprehensive overview of multiple Swift files.
+    ///
+    /// This method analyzes multiple Swift source files and combines their declarations
+    /// into a unified overview. The output format determines how the multi-file information
+    /// is structured and presented.
+    ///
+    /// - Parameters:
+    ///   - urls: An array of file URLs pointing to Swift source files to analyze.
+    ///   - format: The desired output format for the generated overview.
+    ///   - minVisibility: The minimum visibility level to include in the analysis.
+    ///     Only declarations with this visibility level or higher will be included.
+    ///
+    /// - Returns: A string containing the multi-file overview in the specified format.
+    ///
+    /// - Throws:
+    ///   - ``SAAEError/fileNotFound(_:)`` if any specified file doesn't exist.
+    ///   - ``SAAEError/fileReadError(_:_:)`` if any file cannot be read.
+    ///   - Encoding errors if the output format cannot be generated.
+    ///
+    /// ## Format-Specific Behavior
+    ///
+    /// - **JSON/YAML**: Creates a structured object with file metadata and declarations.
+    /// - **Markdown**: Generates a comprehensive document with file sections and cross-references.
+    /// - **Interface**: Concatenates interface declarations with file separators.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let saae = SAAE()
+    /// let fileURLs = [
+    ///     URL(fileURLWithPath: "Models.swift"),
+    ///     URL(fileURLWithPath: "ViewControllers.swift")
+    /// ]
+    /// 
+    /// let overview = try saae.generateMultiFileOverview(
+    ///     urls: fileURLs,
+    ///     format: .markdown,
+    ///     minVisibility: .public
+    /// )
+    /// ```
+    public func generateMultiFileOverview(
+        urls: [URL],
+        format: OutputFormat = .json,
+        minVisibility: VisibilityLevel = .internal
     ) throws -> String {
         var fileOverviews: [FileOverview] = []
         
-        for (handle, filePath) in astHandlesWithPaths {
-            guard let sourceFile = astStorage[handle.id] else {
-                throw SAAEError.invalidASTHandle
-            }
-            
-            // Collect imports
-            let importVisitor = ImportVisitor()
-            importVisitor.walk(sourceFile)
-            let imports = importVisitor.imports
-            
-            // Collect declarations
-            let visitor = DeclarationVisitor(minVisibility: minVisibility)
-            visitor.walk(sourceFile)
-            let declarations = visitor.declarations
+        for url in urls {
+            let tree = try SyntaxTree(url: url)
+            let overview = CodeOverview(tree: tree, minVisibility: minVisibility)
             
             let fileOverview = FileOverview(
-                path: filePath,
-                imports: imports.sorted(),
-                declarations: declarations
+                path: url.path,
+                imports: overview.imports,
+                declarations: overview.declarations
             )
             fileOverviews.append(fileOverview)
         }
@@ -132,20 +229,13 @@ public class SAAE {
         }
     }
     
-    // MARK: - Private Output Generation Methods
+    // MARK: - Private Multi-File Output Generation Methods
     
-    private func generateJSONOutput(_ codeOverview: CodeOverview) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(codeOverview)
-        return String(data: data, encoding: .utf8) ?? ""
-    }
-    
-    private func generateYAMLOutput(_ codeOverview: CodeOverview) throws -> String {
-        let encoder = YAMLEncoder()
-        return try encoder.encode(codeOverview)
-    }
-    
+    /// Generates JSON output for multi-file code overview.
+    ///
+    /// - Parameter multiFileOverview: The structured multi-file overview to encode.
+    /// - Returns: A pretty-printed JSON string representation.
+    /// - Throws: Encoding errors if JSON generation fails.
     private func generateMultiFileJSONOutput(_ multiFileOverview: MultiFileCodeOverview) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -153,11 +243,23 @@ public class SAAE {
         return String(data: data, encoding: .utf8) ?? ""
     }
     
+    /// Generates YAML output for multi-file code overview.
+    ///
+    /// - Parameter multiFileOverview: The structured multi-file overview to encode.
+    /// - Returns: A YAML string representation.
+    /// - Throws: Encoding errors if YAML generation fails.
     private func generateMultiFileYAMLOutput(_ multiFileOverview: MultiFileCodeOverview) throws -> String {
         let encoder = YAMLEncoder()
         return try encoder.encode(multiFileOverview)
     }
     
+    /// Generates Markdown documentation for multiple Swift files.
+    ///
+    /// Creates a comprehensive Markdown document with file navigation,
+    /// detailed declaration information, and cross-references between files.
+    ///
+    /// - Parameter fileOverviews: Array of file overviews to document.
+    /// - Returns: A formatted Markdown string.
     private func generateMultiFileMarkdownOutput(_ fileOverviews: [FileOverview]) -> String {
         var markdown = "# Multi-File Code Overview\n\n"
         
@@ -257,6 +359,13 @@ public class SAAE {
         return markdown
     }
     
+    /// Generates Swift interface declarations for multiple files.
+    ///
+    /// Creates clean interface-style declarations showing the public API
+    /// of multiple Swift files, with proper file separation and formatting.
+    ///
+    /// - Parameter fileOverviews: Array of file overviews to generate interfaces for.
+    /// - Returns: A formatted Swift interface string with file separators.
     private func generateMultiFileInterfaceOutput(_ fileOverviews: [FileOverview]) -> String {
         var interface = ""
         
@@ -265,7 +374,7 @@ public class SAAE {
             interface += String(repeating: "=", count: fileOverview.path.count + 8) + "\n\n"
             
             // Add imports
-            for importName in fileOverview.imports.sorted() {
+            for importName in fileOverview.imports {
                 interface += "import \(importName)\n"
             }
             
@@ -273,9 +382,68 @@ public class SAAE {
                 interface += "\n"
             }
             
-            // Use the existing generateInterfaceOutput logic but for single file
-            let fileInterface = generateInterfaceOutput(fileOverview.declarations, imports: [])
-            interface += fileInterface
+            // Generate interface for declarations
+            func addDeclaration(_ decl: DeclarationOverview, indentLevel: Int = 0) {
+                let indent = String(repeating: "   ", count: indentLevel)
+                
+                // Add attributes if present
+                if let attributes = decl.attributes, !attributes.isEmpty {
+                    for attribute in attributes {
+                        interface += "\(indent)\(attribute)\n"
+                    }
+                }
+                
+                // Generate the declaration signature
+                var declarationLine: String
+                
+                if decl.type == "case" {
+                    declarationLine = "\(indent)"
+                } else {
+                    declarationLine = "\(indent)\(decl.visibility) "
+                }
+                
+                if let signature = decl.signature {
+                    if decl.type == "case" {
+                        declarationLine += "case \(signature)"
+                    } else {
+                        declarationLine += signature
+                    }
+                } else {
+                    if decl.type == "case" {
+                        declarationLine += "case \(decl.name)"
+                    } else {
+                        declarationLine += "\(decl.type) \(decl.name)"
+                    }
+                }
+                
+                let isContainerType = ["class", "struct", "enum", "protocol", "extension"].contains(decl.type)
+                
+                if isContainerType && decl.members != nil && !decl.members!.isEmpty {
+                    declarationLine += " {"
+                }
+                
+                interface += "\(declarationLine)\n"
+                
+                if let members = decl.members, !members.isEmpty {
+                    for member in members {
+                        interface += "\n"
+                        addDeclaration(member, indentLevel: indentLevel + 1)
+                    }
+                    
+                    if isContainerType {
+                        interface += "\n\(indent)}\n"
+                    }
+                } else if isContainerType {
+                    interface += "\(indent)}\n"
+                }
+            }
+            
+            for (declIndex, decl) in fileOverview.declarations.enumerated() {
+                addDeclaration(decl)
+                if declIndex < fileOverview.declarations.count - 1 {
+                    interface += "\n"
+                }
+            }
             
             if index < fileOverviews.count - 1 {
                 interface += "\n\n" + String(repeating: "-", count: 50) + "\n\n"
@@ -283,293 +451,5 @@ public class SAAE {
         }
         
         return interface
-    }
-    
-    private func generateInterfaceOutput(_ overviews: [DeclarationOverview], imports: [String]) -> String {
-        var interface = ""
-        
-        // Add imports at the top
-        for importName in imports.sorted() {
-            interface += "import \(importName)\n"
-        }
-        
-        if !imports.isEmpty {
-            interface += "\n"
-        }
-        
-        func addDeclaration(_ decl: DeclarationOverview, indentLevel: Int = 0) {
-            let indent = String(repeating: "   ", count: indentLevel)
-            
-            // Add attributes if present (property wrappers, Swift macros, etc.)
-            if let attributes = decl.attributes, !attributes.isEmpty {
-                for attribute in attributes {
-                    interface += "\(indent)\(attribute)\n"
-                }
-            }
-            
-            // Add documentation if available
-            if let documentation = decl.documentation {
-                let hasParameters = !documentation.parameters.isEmpty
-                let hasReturns = documentation.returns != nil
-                let hasThrows = documentation.throwsInfo != nil
-                let hasDescription = !documentation.description.isEmpty
-                
-                // Determine if we need block comment format
-                let needsBlockFormat = hasParameters || hasReturns || hasThrows
-                
-                if hasDescription {
-                    let descriptionLines = documentation.description.components(separatedBy: .newlines)
-                    let nonEmptyLines = descriptionLines.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                    
-                    // Use /** */ format for multi-line descriptions OR when there are parameters/returns/throws
-                    let isMultiLine = nonEmptyLines.count > 1
-                    let useBlockFormat = needsBlockFormat || isMultiLine
-                    
-                    if useBlockFormat {
-                        // Use /** */ format for complex documentation or multi-line descriptions
-                        interface += "\(indent)/**\n"
-                        for line in nonEmptyLines {
-                            interface += "\(indent) \(line.trimmingCharacters(in: .whitespacesAndNewlines))\n"
-                        }
-                        
-                        // Add blank line before parameters/returns/throws if there's a description and parameters exist
-                        if hasDescription && (hasParameters || hasReturns || hasThrows) {
-                            interface += "\(indent)\n"
-                        }
-                        
-                        // Add parameter documentation
-                        if hasParameters {
-                            interface += "\(indent) - Parameters:\n"
-                            for (paramName, paramDesc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
-                                interface += "\(indent)     - \(paramName): \(paramDesc)\n"
-                            }
-                        }
-                        
-                        // Add throws documentation
-                        if let throwsInfo = documentation.throwsInfo {
-                            interface += "\(indent) - Throws: \(throwsInfo)\n"
-                        }
-                        
-                        // Add returns documentation
-                        if let returns = documentation.returns {
-                            interface += "\(indent) - Returns: \(returns)\n"
-                        }
-                        
-                        interface += "\(indent) */\n"
-                    } else {
-                        // Use /// format for single-line simple descriptions
-                        interface += "\(indent)/// \(nonEmptyLines[0].trimmingCharacters(in: .whitespacesAndNewlines))\n"
-                    }
-                } else if needsBlockFormat {
-                    // Only parameters/returns/throws without description
-                    interface += "\(indent)/**\n"
-                    
-                    // Add parameter documentation
-                    if hasParameters {
-                        interface += "\(indent) - Parameters:\n"
-                        for (paramName, paramDesc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
-                            interface += "\(indent)     - \(paramName): \(paramDesc)\n"
-                        }
-                    }
-                    
-                    // Add throws documentation
-                    if let throwsInfo = documentation.throwsInfo {
-                        interface += "\(indent) - Throws: \(throwsInfo)\n"
-                    }
-                    
-                    // Add returns documentation
-                    if let returns = documentation.returns {
-                        interface += "\(indent) - Returns: \(returns)\n"
-                    }
-                    
-                    interface += "\(indent) */\n"
-                }
-            }
-            
-            // Generate the declaration signature
-            var declarationLine: String
-            
-            // Enum cases don't show their visibility (they inherit from parent enum)
-            if decl.type == "case" {
-                declarationLine = "\(indent)"
-            } else {
-                declarationLine = "\(indent)\(decl.visibility) "
-            }
-            
-            if let signature = decl.signature {
-                // Handle property formatting for let/var declarations
-                if decl.type == "let" || decl.type == "var" {
-                    // Convert let/var signatures to interface-style property declarations
-                    var modifiedSignature = signature
-                    
-                    // Replace "let" with "var" and add "{ get }"
-                    if decl.type == "let" {
-                        modifiedSignature = modifiedSignature.replacingOccurrences(of: "^let ", with: "var ", options: .regularExpression)
-                        modifiedSignature += " { get }"
-                    }
-                    // For "var", add "{ get set }"
-                    else if decl.type == "var" {
-                        modifiedSignature += " { get set }"
-                    }
-                    
-                    declarationLine += modifiedSignature
-                } else if decl.type == "case" {
-                    // For enum cases, show "case" keyword but omit visibility modifier
-                    declarationLine += "case \(signature)"
-                } else {
-                    declarationLine += signature
-                }
-            } else {
-                // For container types without signatures
-                if decl.type == "case" {
-                    declarationLine += "case \(decl.name)"
-                } else {
-                    declarationLine += "\(decl.type) \(decl.name)"
-                    
-                    // Add inheritance/conformances if this is an extension
-                    if decl.type == "extension" {
-                        // Extension names already include the type being extended
-                        declarationLine = "\(indent)\(decl.visibility) extension \(decl.name)"
-                    }
-                }
-            }
-            
-            // Add opening brace for container types
-            let isContainerType = ["class", "struct", "enum", "protocol", "extension"].contains(decl.type)
-            
-            if isContainerType && decl.members != nil && !decl.members!.isEmpty {
-                declarationLine += " {"
-            }
-            
-            interface += "\(declarationLine)\n"
-            
-            // Add members for container types with proper indentation
-            if let members = decl.members, !members.isEmpty {
-                // Special handling for enums to group cases separately
-                if decl.type == "enum" {
-                    let cases = members.filter { $0.type == "case" }
-                    let nonCases = members.filter { $0.type != "case" }
-                    
-                    // Add cases section
-                    if !cases.isEmpty {
-                        interface += "\n\(indent)   // Cases\n"
-                        for member in cases {
-                            interface += "\n"
-                            addDeclaration(member, indentLevel: indentLevel + 1)
-                        }
-                    }
-                    
-                    // Add utilities section for non-case members
-                    if !nonCases.isEmpty {
-                        interface += "\n\n\(indent)   // Utilities\n"
-                        for member in nonCases {
-                            interface += "\n"
-                            addDeclaration(member, indentLevel: indentLevel + 1)
-                        }
-                    }
-                } else {
-                    // Normal handling for non-enum types
-                    for member in members {
-                        interface += "\n"
-                        addDeclaration(member, indentLevel: indentLevel + 1)
-                    }
-                }
-                
-                // Add closing brace for container types without extra space
-                if isContainerType {
-                    interface += "\n\(indent)}\n"
-                }
-            } else if isContainerType {
-                // Empty container, still need closing brace
-                interface += "\(indent)}\n"
-            }
-        }
-        
-        for (index, decl) in overviews.enumerated() {
-            addDeclaration(decl)
-            if index < overviews.count - 1 {
-                interface += "\n"
-            }
-        }
-        
-        return interface
-    }
-    
-    private func generateMarkdownOutput(_ codeOverview: CodeOverview) -> String {
-        var markdown = "# Code Overview\n\n"
-        
-        // Add imports section if there are any imports
-        if !codeOverview.imports.isEmpty {
-            markdown += "## Imports\n\n"
-            for importName in codeOverview.imports {
-                markdown += "- `import \(importName)`\n"
-            }
-            markdown += "\n---\n\n"
-        }
-        
-        func addDeclaration(_ decl: DeclarationOverview, level: Int = 2) {
-            let heading = String(repeating: "#", count: level)
-            let title = decl.fullName ?? decl.name
-            markdown += "\(heading) \(decl.type.capitalized): \(title)\n\n"
-            
-            markdown += "**Path:** `\(decl.path)`  \n"
-            markdown += "**Visibility:** `\(decl.visibility)`  \n"
-            
-            if let attributes = decl.attributes, !attributes.isEmpty {
-                markdown += "**Attributes:** `\(attributes.joined(separator: " "))`  \n"
-            }
-            
-            if let signature = decl.signature {
-                markdown += "**Signature:** `\(signature)`  \n"
-            }
-            
-            markdown += "\n"
-            
-            if let documentation = decl.documentation {
-                if !documentation.description.isEmpty {
-                    markdown += "\(documentation.description)\n\n"
-                }
-                
-                if !documentation.parameters.isEmpty {
-                    markdown += "**Parameters:**\n"
-                    for (name, desc) in documentation.parameters.sorted(by: { $0.key < $1.key }) {
-                        markdown += "- `\(name)`: \(desc)\n"
-                    }
-                    markdown += "\n"
-                }
-                
-                if let throwsInfo = documentation.throwsInfo {
-                    markdown += "**Throws:** \(throwsInfo)\n\n"
-                }
-                
-                if let returns = documentation.returns {
-                    markdown += "**Returns:** \(returns)\n\n"
-                }
-            }
-            
-            // Enhanced children references with type and name information
-            if let members = decl.members, !members.isEmpty {
-                markdown += "**Children:**\n"
-                for member in members {
-                    let memberTitle = member.fullName ?? member.name
-                    markdown += "- `\(member.path)` - \(member.type.capitalized): **\(memberTitle)**\n"
-                }
-                markdown += "\n"
-            }
-            
-            markdown += "---\n\n"
-        }
-        
-        func processDeclarations(_ declarations: [DeclarationOverview]) {
-            for decl in declarations {
-                addDeclaration(decl)
-                if let members = decl.members {
-                    processDeclarations(members)
-                }
-            }
-        }
-        
-        processDeclarations(codeOverview.declarations)
-        return markdown
     }
 } 

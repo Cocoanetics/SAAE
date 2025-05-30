@@ -267,27 +267,20 @@ struct ErrorsCommand: AsyncParsableCommand {
                     let prefix = String(format: "%*d | ", lineNumberWidth, lineNumber)
                     markdown += prefix + line + "\n"
                     if isErrorLine {
-                        // swiftc style error line: "  |             `- error: message"
-                        let errorColumnPos = max(0, error.location.column - 1)
-                        let leadingSpaces = String(repeating: " ", count: lineNumberWidth)
-                        let pipeSpaces = String(repeating: " ", count: errorColumnPos)
-                        let errorLine = leadingSpaces + " | " + pipeSpaces + "|- error: \(error.message)\n"
-                        markdown += errorLine
-                        
-                        // Notes (if any) - same positioning style
-                        for note in error.notes {
-                            let noteLine = leadingSpaces + " | " + pipeSpaces + "|- note: \(note.message)\n"
-                            markdown += noteLine
-                        }
-                        
-                        // Fix-its (if flag is set) - same positioning style
+                        // Collect all pointer lines (error, notes, fix-its)
+                        var pointerLines: [(String, String)] = [("error", error.message)]
+                        for note in error.notes { pointerLines.append(("note", note.message)) }
                         if showFixits, !error.fixIts.isEmpty {
                             for fixIt in error.fixIts {
-                                // Use the properly escaped message from SyntaxFixIt instead of reconstructing
-                                let fixitMsg = "fix-it: \(fixIt.message)"
-                                let fixitLine = leadingSpaces + " | " + pipeSpaces + "|- " + fixitMsg + "\n"
-                                markdown += fixitLine
+                                pointerLines.append(("fix-it", fixIt.message))
                             }
+                        }
+                        let pointerCount = pointerLines.count
+                        for (i, (kind, msg)) in pointerLines.enumerated() {
+                            let isLast = (i == pointerCount - 1)
+                            let branch = isLast ? "└──" : "├──"
+                            let pointerLine = prefix + branch + " " + (kind == "error" ? "error: " : kind == "note" ? "note: " : "fix-it: ") + msg + "\n"
+                            markdown += pointerLine
                         }
                     }
                 }

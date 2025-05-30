@@ -239,76 +239,10 @@ extension SyntaxErrorDetail {
         // Process fix-its with SourceLocationConverter
         var fixIts: [SyntaxFixIt] = []
         for fixIt in diagnostic.fixIts {
-            for change in fixIt.changes {
-                switch change {
-                case .replace(let oldNode, let newNode):
-                    let fixItLocation = converter.location(for: oldNode.position)
-                    let originalText = oldNode.description
-                    let replacementText = newNode.description
-                    
-                    // Generate human-readable message
-                    let message = Self.generateFixItMessage(
-                        originalText: originalText,
-                        replacementText: replacementText
-                    )
-                    
-                    let fix = SyntaxFixIt(
-                        message: message,
-                        originalText: originalText,
-                        replacementText: replacementText,
-                        range: fixItLocation
-                    )
-                    fixIts.append(fix)
-                    
-                case .replaceLeadingTrivia(let token, let newTrivia):
-                    let fixItLocation = converter.location(for: token.position)
-                    let originalText = token.leadingTrivia.description
-                    let replacementText = newTrivia.description
-                    
-                    // Generate human-readable message
-                    let message = Self.generateFixItMessage(
-                        originalText: originalText,
-                        replacementText: replacementText
-                    )
-                    
-                    let fix = SyntaxFixIt(
-                        message: message,
-                        originalText: originalText,
-                        replacementText: replacementText,
-                        range: fixItLocation
-                    )
-                    fixIts.append(fix)
-                    
-                case .replaceTrailingTrivia(let token, let newTrivia):
-                    let fixItLocation = converter.location(for: token.endPositionBeforeTrailingTrivia)
-                    let originalText = token.trailingTrivia.description
-                    let replacementText = newTrivia.description
-                    
-                    // Generate human-readable message
-                    let message = Self.generateFixItMessage(
-                        originalText: originalText,
-                        replacementText: replacementText
-                    )
-                    
-                    let fix = SyntaxFixIt(
-                        message: message,
-                        originalText: originalText,
-                        replacementText: replacementText,
-                        range: fixItLocation
-                    )
-                    fixIts.append(fix)
-                    
-                @unknown default:
-                    // Handle any future fix-it types gracefully
-                    let fixItLocation = self.location // Fallback to main diagnostic location
-                    let fix = SyntaxFixIt(
-                        message: "suggested fix",
-                        originalText: "",
-                        replacementText: "",
-                        range: fixItLocation
-                    )
-                    fixIts.append(fix)
-                }
+            // Process all changes for this fix-it together to create a single logical fix-it
+            let combinedFixIt = Self.processCombinedFixIt(fixIt, converter: converter, fallbackLocation: self.location)
+            if let fix = combinedFixIt {
+                fixIts.append(fix)
             }
         }
         self.fixIts = fixIts
@@ -337,35 +271,158 @@ extension SyntaxErrorDetail {
         self.notes = notes
     }
     
-    /// Generates a human-readable fix-it message based on the original and replacement text
-    private static func generateFixItMessage(originalText: String, replacementText: String) -> String {
-        let cleanOriginal = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanReplacement = replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Processes a combined fix-it from multiple changes
+    private static func processCombinedFixIt(_ fixIt: FixIt, converter: SourceLocationConverter, fallbackLocation: SourceLocation) -> SyntaxFixIt? {
+        var insertions: [String] = []
+        var removals: [String] = []
+        var replacements: [(String, String)] = []
+        var primaryLocation: SourceLocation = fallbackLocation
+        var hasValidChanges = false
         
-        if cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
-            // Inserting non-whitespace content
-            let escaped = escapeForDisplay(replacementText)
-            return "insert `\(escaped)`"
-        } else if !cleanOriginal.isEmpty && cleanReplacement.isEmpty {
-            // Removing content, show what's being removed
-            let escaped = escapeForDisplay(originalText)
-            return "remove `\(escaped)`"
-        } else if !cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
-            // Replacing non-whitespace with non-whitespace
-            let escapedOrig = escapeForDisplay(originalText)
-            let escapedRepl = escapeForDisplay(replacementText)
-            return "replace `\(escapedOrig)` with `\(escapedRepl)`"
-        } else if cleanOriginal.isEmpty && cleanReplacement.isEmpty {
-            // Both are whitespace-only, show what's happening with whitespace
-            if originalText != replacementText {
-                let escapedOrig = escapeForDisplay(originalText)
-                let escapedRepl = escapeForDisplay(replacementText)
-                return "replace `\(escapedOrig)` with `\(escapedRepl)`"
-            } else {
-                return "fix syntax error"
+        // Process all changes and categorize them
+        for change in fixIt.changes {
+            switch change {
+            case .replace(let oldNode, let newNode):
+                let location = converter.location(for: oldNode.position)
+                let originalText = oldNode.description
+                let replacementText = newNode.description
+                
+                // Use the first valid location as primary
+                if !hasValidChanges {
+                    primaryLocation = location
+                    hasValidChanges = true
+                }
+                
+                if originalText.isEmpty && !replacementText.isEmpty {
+                    // This is an insertion
+                    insertions.append(replacementText)
+                } else if !originalText.isEmpty && replacementText.isEmpty {
+                    // This is a removal
+                    removals.append(originalText)
+                } else if !originalText.isEmpty && !replacementText.isEmpty {
+                    // This is a replacement
+                    replacements.append((originalText, replacementText))
+                }
+                
+            case .replaceLeadingTrivia(let token, let newTrivia):
+                let location = converter.location(for: token.position)
+                let originalText = token.leadingTrivia.description
+                let replacementText = newTrivia.description
+                
+                // Skip meaningless trivia changes
+                if originalText.isEmpty && replacementText.isEmpty {
+                    continue
+                }
+                
+                if !hasValidChanges {
+                    primaryLocation = location
+                    hasValidChanges = true
+                }
+                
+                if originalText.isEmpty && !replacementText.isEmpty {
+                    insertions.append(replacementText)
+                } else if !originalText.isEmpty && replacementText.isEmpty {
+                    removals.append(originalText)
+                } else if !originalText.isEmpty && !replacementText.isEmpty {
+                    replacements.append((originalText, replacementText))
+                }
+                
+            case .replaceTrailingTrivia(let token, let newTrivia):
+                let location = converter.location(for: token.endPositionBeforeTrailingTrivia)
+                let originalText = token.trailingTrivia.description
+                let replacementText = newTrivia.description
+                
+                // Skip meaningless trivia changes
+                if originalText.isEmpty && replacementText.isEmpty {
+                    continue
+                }
+                
+                if !hasValidChanges {
+                    primaryLocation = location
+                    hasValidChanges = true
+                }
+                
+                if originalText.isEmpty && !replacementText.isEmpty {
+                    insertions.append(replacementText)
+                } else if !originalText.isEmpty && replacementText.isEmpty {
+                    removals.append(originalText)
+                } else if !originalText.isEmpty && !replacementText.isEmpty {
+                    replacements.append((originalText, replacementText))
+                }
+                
+            @unknown default:
+                // For unknown change types, create a generic fix-it
+                if !hasValidChanges {
+                    hasValidChanges = true
+                }
             }
-        } else {
+        }
+        
+        // If no valid changes were found, return nil
+        guard hasValidChanges else { return nil }
+        
+        // Generate a combined message based on the changes
+        let message = generateCombinedFixItMessage(
+            insertions: insertions,
+            removals: removals,
+            replacements: replacements
+        )
+        
+        // For the combined fix-it, we'll use the concatenated insertions as replacementText
+        // and empty string as originalText (since it's a composite operation)
+        let combinedReplacementText = insertions.joined(separator: "")
+        
+        return SyntaxFixIt(
+            message: message,
+            originalText: "",
+            replacementText: combinedReplacementText,
+            range: primaryLocation
+        )
+    }
+    
+    /// Generates a human-readable message for combined fix-it operations
+    private static func generateCombinedFixItMessage(
+        insertions: [String],
+        removals: [String],
+        replacements: [(String, String)]
+    ) -> String {
+        var messageParts: [String] = []
+        
+        // Handle insertions
+        if !insertions.isEmpty {
+            let escapedInsertions = insertions.map { escapeForDisplay($0) }
+            if insertions.count == 1 {
+                messageParts.append("insert `\(escapedInsertions[0])`")
+            } else {
+                let combined = escapedInsertions.joined(separator: "")
+                messageParts.append("insert `\(combined)`")
+            }
+        }
+        
+        // Handle removals
+        if !removals.isEmpty {
+            let escapedRemovals = removals.map { escapeForDisplay($0) }
+            if removals.count == 1 {
+                messageParts.append("remove `\(escapedRemovals[0])`")
+            } else {
+                messageParts.append("remove `\(escapedRemovals.joined(separator: ", "))`")
+            }
+        }
+        
+        // Handle replacements
+        for (original, replacement) in replacements {
+            let escapedOrig = escapeForDisplay(original)
+            let escapedRepl = escapeForDisplay(replacement)
+            messageParts.append("replace `\(escapedOrig)` with `\(escapedRepl)`")
+        }
+        
+        // Combine all parts
+        if messageParts.isEmpty {
             return "fix syntax error"
+        } else if messageParts.count == 1 {
+            return messageParts[0]
+        } else {
+            return messageParts.joined(separator: " and ")
         }
     }
     

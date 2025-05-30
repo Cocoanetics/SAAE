@@ -271,12 +271,12 @@ struct ErrorsCommand: AsyncParsableCommand {
                         let errorColumnPos = max(0, error.location.column - 1)
                         let leadingSpaces = String(repeating: " ", count: lineNumberWidth)
                         let pipeSpaces = String(repeating: " ", count: errorColumnPos)
-                        let errorLine = leadingSpaces + " | " + pipeSpaces + "`- error: \(error.message)\n"
+                        let errorLine = leadingSpaces + " | " + pipeSpaces + "|- error: \(error.message)\n"
                         markdown += errorLine
                         
                         // Notes (if any) - same positioning style
                         for note in error.notes {
-                            let noteLine = leadingSpaces + " | " + pipeSpaces + "`- note: \(note.message)\n"
+                            let noteLine = leadingSpaces + " | " + pipeSpaces + "|- note: \(note.message)\n"
                             markdown += noteLine
                         }
                         
@@ -285,7 +285,7 @@ struct ErrorsCommand: AsyncParsableCommand {
                             for fixIt in error.fixIts {
                                 // Use the properly escaped message from SyntaxFixIt instead of reconstructing
                                 let fixitMsg = "fix-it: \(fixIt.message)"
-                                let fixitLine = leadingSpaces + " | " + pipeSpaces + "`- " + fixitMsg + "\n"
+                                let fixitLine = leadingSpaces + " | " + pipeSpaces + "|- " + fixitMsg + "\n"
                                 markdown += fixitLine
                             }
                         }

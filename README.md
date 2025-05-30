@@ -203,19 +203,41 @@ let incomplete = 1 + + 2  // ❌ Invalid operator sequence
 
 **SAAE Error Output:**
 ```
-MyFile.swift:3:21: error: unexpected code ': <T>(value: T) -> T' in function
- 3 ┃     func invalidFunc: <T>(value: T) -> T {
-   ┃                     ┣━━ error: unexpected code ': <T>(value: T) -> T' in function
-   ┃                     ┗━━ fix-it: remove ': <T>(value: T) -> T'
+Tests/Resources/ErrorSamples/type_annotations.swift:6:18: error: expected ':' in type annotation
+5 ┃     // Missing colon in type annotation
+6 ┃     let property1 String = "hello"
+  ┃                  ┗━━ error: expected ':' in type annotation
+7 ┃     
 
-MyFile.swift:7:24: error: expected '=' in variable
- 7 ┃     var property: Int String = 5
-   ┃                        ┣━━ error: expected '=' in variable
-   ┃                        ┗━━ fix-it: insert `= `
+Tests/Resources/ErrorSamples/type_annotations.swift:9:9: error: expected pattern in variable
+ 8 ┃     // Missing variable name
+ 9 ┃     let = 42
+   ┃         ┗━━ error: expected pattern in variable
+10 ┃     
 
-MyFile.swift:9:24: error: expected expression after operator
- 9 ┃     let incomplete = 1 + + 2
-   ┃                        ┗━━ error: expected expression after operator
+Tests/Resources/ErrorSamples/type_annotations.swift:12:24: error: expected '=' in variable
+11 ┃     // Invalid type syntax
+12 ┃     var property2: Int String = 5
+   ┃                        ┗━━ error: expected '=' in variable
+13 ┃     
+
+Tests/Resources/ErrorSamples/type_annotations.swift:15:20: error: expected type in type annotation
+14 ┃     // Missing type after colon
+15 ┃     let property3: = "test"
+   ┃                    ┗━━ error: expected type in type annotation
+16 ┃     
+
+Tests/Resources/ErrorSamples/type_annotations.swift:19:21: error: expected ':' in type annotation
+18 ┃         // Missing colon in local variable
+19 ┃         let localVar Int = 10
+   ┃                     ┗━━ error: expected ':' in type annotation
+20 ┃         
+
+Tests/Resources/ErrorSamples/type_annotations.swift:22:34: error: expected ':' and type in parameter
+21 ┃         // Invalid parameter syntax
+22 ┃         func invalidParam( String) {
+   ┃                                  ┗━━ error: expected ':' and type in parameter
+23 ┃             print("invalid")
 ```
 
 ### Error Checking Features

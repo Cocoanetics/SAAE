@@ -171,6 +171,8 @@ for url in urls {
 
 SAAE goes beyond just parsing - it provides **advanced error detection and reporting** with precise positioning and helpful fix-it suggestions. Perfect for code validation, CI/CD pipelines, and development tooling.
 
+> **🤖 Perfect for Code Generators**: SAAE provides **ultra-fast syntax validation** for Swift code produced by code generators, LLMs, and automated tools. While it cannot perform semantic checking (like type validation), it **catches all syntax errors** with precise positioning - making it ideal for validating generated code before compilation.
+
 ### Quick Error Checking
 ```bash
 # Check syntax errors in a file
@@ -202,18 +204,18 @@ let incomplete = 1 + + 2  // ❌ Invalid operator sequence
 **SAAE Error Output:**
 ```
 MyFile.swift:3:21: error: unexpected code ': <T>(value: T) -> T' in function
- 3 |     func invalidFunc: <T>(value: T) -> T {
-   |                     `- error: unexpected code ': <T>(value: T) -> T' in function
-   |                     `- fix-it: remove ': <T>(value: T) -> T'
+ 3 ┃     func invalidFunc: <T>(value: T) -> T {
+   ┃                     ┣━━ error: unexpected code ': <T>(value: T) -> T' in function
+   ┃                     ┗━━ fix-it: remove ': <T>(value: T) -> T'
 
 MyFile.swift:7:24: error: expected '=' in variable
- 7 |     var property: Int String = 5
-   |                        `- error: expected '=' in variable
-   |                        `- fix-it: insert `= `
+ 7 ┃     var property: Int String = 5
+   ┃                        ┣━━ error: expected '=' in variable
+   ┃                        ┗━━ fix-it: insert `= `
 
 MyFile.swift:9:24: error: expected expression after operator
- 9 |     let incomplete = 1 + + 2
-   |                        `- error: expected expression after operator
+ 9 ┃     let incomplete = 1 + + 2
+   ┃                        ┗━━ error: expected expression after operator
 ```
 
 ### Error Checking Features
@@ -299,6 +301,12 @@ SAAE catches sophisticated syntax errors that basic parsers miss:
 - **Missing braces, brackets, and delimiters** with context
 
 ### Why SAAE for Error Checking?
+
+**🤖 Code Generator Validation**
+- **Ultra-fast syntax checking** for generated Swift code from LLMs, templates, and automation tools
+- **Instant feedback** without compilation overhead - perfect for validating code before writing to disk
+- **Syntax-only validation** catches malformed declarations, missing operators, invalid expressions
+- **Not semantic checking** - won't catch type mismatches or undefined variables, but catches all syntax errors
 
 **🎯 Superior Accuracy**
 - Built on SwiftSyntax for **100% Swift-compliant** parsing
@@ -420,6 +428,24 @@ swift run SAAEDemo errors Sources/ --recursive --format markdown > error_report.
 
 # Quick syntax check
 swift run SAAEDemo errors MyChangedFile.swift
+```
+
+### For Code Generators
+```bash
+# Validate generated Swift code instantly
+swift run SAAEDemo errors generated_code.swift
+
+# Batch validate multiple generated files
+swift run SAAEDemo errors GeneratedCode/ --recursive --format json
+
+# Use in code generation pipelines
+if swift run SAAEDemo errors "$generated_file"; then
+    echo "✅ Generated code is syntactically valid"
+    # Safe to write to final destination
+else
+    echo "❌ Generated code has syntax errors - regenerating..."
+    # Handle regeneration or fix-up logic
+fi
 ```
 
 ## 🔧 Requirements

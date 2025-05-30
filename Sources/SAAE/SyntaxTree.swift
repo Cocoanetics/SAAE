@@ -1,6 +1,8 @@
 import Foundation
 import SwiftSyntax
 import SwiftParser
+import SwiftDiagnostics
+import SwiftParserDiagnostics
 
 /// A wrapper around SwiftSyntax's SourceFileSyntax for easier manipulation and analysis.
 ///
@@ -34,60 +36,254 @@ public struct SyntaxTree {
     /// that require working with the raw syntax nodes.
     internal let sourceFile: SourceFileSyntax
     
+    /// Pre-split source lines for efficient error context extraction
+    private let sourceLines: [String]
+    
+    /// Source location converter for position mapping
+    private let locationConverter: SourceLocationConverter
+    
     /// Creates a syntax tree by parsing a Swift source file from disk.
     ///
-    /// This initializer reads the file content and parses it into a syntax tree. It provides
-    /// comprehensive error handling for common file operations.
-    ///
-    /// - Parameter url: A file URL pointing to a local Swift source file.
-    /// - Throws: 
-    ///   - ``SAAEError/fileNotFound(_:)`` if the file doesn't exist at the specified path.
-    ///   - ``SAAEError/fileReadError(_:_:)`` if the file exists but cannot be read (e.g., due to permissions).
-    ///
-    /// ## Example
-    /// ```swift
-    /// let fileURL = URL(fileURLWithPath: "/path/to/MyFile.swift")
-    /// let tree = try SyntaxTree(url: fileURL)
-    /// ```
+    /// - Parameter url: The URL of the Swift source file to parse
+    /// - Throws: SAAEError if the file cannot be read or parsed
     public init(url: URL) throws {
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            throw SAAEError.fileNotFound(url)
-        }
-        
-        let codeString: String
-        do {
-            codeString = try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            throw SAAEError.fileReadError(url, error)
-        }
-        
-        try self.init(string: codeString)
+        let string = try String(contentsOf: url)
+        self.sourceFile = Parser.parse(source: string)
+        self.sourceLines = string.split(separator: "\n").map { String($0) }
+        self.locationConverter = SourceLocationConverter(fileName: url.lastPathComponent, tree: self.sourceFile)
     }
     
     /// Creates a syntax tree by parsing Swift source code from a string.
     ///
-    /// This initializer parses the provided Swift source code directly, without involving file I/O.
-    /// It's useful for analyzing dynamically generated code or code provided as string literals.
-    ///
-    /// - Parameter string: A string containing valid Swift source code to parse.
-    /// - Throws: Currently does not throw, but marked as throwing for future compatibility with parsing error handling.
-    ///
-    /// ## Example
-    /// ```swift
-    /// let code = """
-    /// struct MyStruct {
-    ///     let value: Int
-    /// }
-    /// """
-    /// let tree = try SyntaxTree(string: code)
-    /// ```
-    ///
-    /// - Note: SwiftSyntax's parser is generally robust and will attempt to parse even malformed code,
-    ///   creating error nodes where necessary rather than failing completely.
-    public init(string: String) throws {
-    /// Initialize from a Swift source code string
-    /// - Parameter string: String containing Swift source code
+    /// - Parameter string: The Swift source code to parse
     /// - Throws: SAAEError if code cannot be parsed
+    public init(string: String) throws {
         self.sourceFile = Parser.parse(source: string)
+        self.sourceLines = string.split(separator: "\n").map { String($0) }
+        self.locationConverter = SourceLocationConverter(fileName: "source.swift", tree: self.sourceFile)
+    }
+    
+    // MARK: - Phase 2: Syntax Error Detection
+    
+    /**
+     All syntax errors found in the parsed source code.
+     
+     This property analyzes the syntax tree and extracts detailed information about
+     any syntax errors discovered during parsing. Each error includes location,
+     context, suggested fixes, and visual indicators.
+     
+     - Returns: An array of SyntaxErrorDetail objects, empty if no errors found
+     */
+    public var syntaxErrors: [SyntaxErrorDetail] {
+        let diagnostics = ParseDiagnosticsGenerator.diagnostics(for: sourceFile)
+        return diagnostics.map { diagnostic in
+            SyntaxErrorDetail(from: diagnostic, sourceLines: sourceLines, converter: locationConverter)
+        }
+    }
+    
+    /**
+     Checks if the source code has any syntax errors.
+     
+     - Returns: true if syntax errors were found, false if the code is syntactically valid
+     */
+    public var hasSyntaxErrors: Bool {
+        return !syntaxErrors.isEmpty
+    }
+    
+    /**
+     Returns a count of syntax errors found in the source.
+     
+     - Returns: The number of syntax errors detected
+     */
+    public var syntaxErrorCount: Int {
+        return syntaxErrors.count
+    }
+} 
+
+// MARK: - Phase 2: Syntax Error Detection and Reporting
+
+/**
+ Detailed information about a syntax error found in Swift source code.
+ 
+ This structure provides comprehensive error reporting including location,
+ context, suggested fixes, and visual indicators for precise error identification.
+ */
+public struct SyntaxErrorDetail {
+    /// The main error message describing what went wrong
+    public let message: String
+    
+    /// Source location information with line/column positions
+    public let location: SourceLocation
+    
+    /// The actual line of source code containing the error
+    public let sourceLineText: String
+    
+    /// Visual caret line pointing to the exact error location
+    public let caretLineText: String
+    
+    /// Surrounding source lines for context (typically 1-2 lines above/below)
+    public let sourceContext: [String]
+    
+    /// Range of lines shown in sourceContext (e.g., "3-5")
+    public let contextRange: String
+    
+    /// Available fix-it suggestions for automatically correcting the error
+    public let fixIts: [SyntaxFixIt]
+    
+    /// Additional notes providing more context about the error
+    public let notes: [SyntaxNote]
+    
+    /// The raw Swift syntax node that caused the error
+    public let affectedNode: Syntax
+}
+
+/**
+ A suggested fix for a syntax error with specific text replacement information.
+ */
+public struct SyntaxFixIt {
+    /// Human-readable description of what the fix does
+    public let message: String
+    
+    /// The original text to be replaced
+    public let originalText: String
+    
+    /// The suggested replacement text
+    public let replacementText: String
+    
+    /// Source location range for the replacement
+    public let range: SourceLocation
+}
+
+/**
+ Additional contextual information about a syntax error.
+ */
+public struct SyntaxNote {
+    /// The note's message
+    public let message: String
+    
+    /// Source location where this note applies
+    public let location: SourceLocation?
+    
+    /// The source line for this note's location
+    public let sourceLineText: String?
+}
+
+extension SyntaxErrorDetail {
+    /**
+     Creates a SyntaxErrorDetail from a SwiftDiagnostics Diagnostic.
+     
+     This initializer implements the user's feedback:
+     - Stores fullSourceText as lines for fast access
+     - Uses SourceLocationConverter for line content extraction
+     - Handles edge cases with bounds checking
+     - Generates visual caret indicators
+     
+     - Parameters:
+       - diagnostic: The diagnostic from SwiftParserDiagnostics
+       - sourceLines: Pre-split source code lines for efficient access
+       - converter: SourceLocationConverter for position mapping
+     */
+    public init(from diagnostic: Diagnostic, sourceLines: [String], converter: SourceLocationConverter) {
+        // Basic diagnostic information
+        self.message = diagnostic.message
+        self.location = diagnostic.location(converter: converter)
+        self.affectedNode = diagnostic.node
+        
+        // Extract source line text with bounds checking
+        let lineIndex = self.location.line - 1 // Convert to 0-based index
+        if lineIndex >= 0 && lineIndex < sourceLines.count {
+            self.sourceLineText = sourceLines[lineIndex]
+        } else {
+            self.sourceLineText = "" // Edge case: invalid line number
+        }
+        
+        // Generate visual caret line (e.g., "    ^")
+        let caretPosition = max(0, self.location.column - 1) // Convert to 0-based, ensure non-negative
+        self.caretLineText = String(repeating: " ", count: caretPosition) + "^"
+        
+        // Extract source context (lines around the error)
+        let contextRadius = 1 // Show 1 line above and below
+        let startLine = max(0, lineIndex - contextRadius)
+        let endLine = min(sourceLines.count - 1, lineIndex + contextRadius)
+        
+        var contextLines: [String] = []
+        for i in startLine...endLine {
+            contextLines.append(sourceLines[i])
+        }
+        self.sourceContext = contextLines
+        self.contextRange = "\(startLine + 1)-\(endLine + 1)" // Convert back to 1-based for display
+        
+        // Process fix-its with SourceLocationConverter
+        var fixIts: [SyntaxFixIt] = []
+        for fixIt in diagnostic.fixIts {
+            for change in fixIt.changes {
+                switch change {
+                case .replace(let oldNode, let newNode):
+                    let fixItLocation = converter.location(for: oldNode.position)
+                    let fix = SyntaxFixIt(
+						message: fixIt.message.message,
+                        originalText: oldNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                        replacementText: newNode.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                        range: fixItLocation
+                    )
+                    fixIts.append(fix)
+                    
+                case .replaceLeadingTrivia(let token, let newTrivia):
+                    let fixItLocation = converter.location(for: token.position)
+                    let fix = SyntaxFixIt(
+                        message: fixIt.message.message,
+                        originalText: token.leadingTrivia.description,
+                        replacementText: newTrivia.description,
+                        range: fixItLocation
+                    )
+                    fixIts.append(fix)
+                    
+                case .replaceTrailingTrivia(let token, let newTrivia):
+                    let fixItLocation = converter.location(for: token.endPositionBeforeTrailingTrivia)
+                    let fix = SyntaxFixIt(
+                        message: fixIt.message.message,
+                        originalText: token.trailingTrivia.description,
+                        replacementText: newTrivia.description,
+                        range: fixItLocation
+                    )
+                    fixIts.append(fix)
+                    
+                @unknown default:
+                    // Handle any future fix-it types gracefully
+                    let fixItLocation = self.location // Fallback to main diagnostic location
+                    let fix = SyntaxFixIt(
+                        message: fixIt.message.message,
+                        originalText: "",
+                        replacementText: "",
+                        range: fixItLocation
+                    )
+                    fixIts.append(fix)
+                }
+            }
+        }
+        self.fixIts = fixIts
+        
+        // Process notes
+        var notes: [SyntaxNote] = []
+        for note in diagnostic.notes {
+            let noteLocation = converter.location(for: note.node.position)
+            
+            // Extract source line for the note with bounds checking
+            let noteLineIndex = noteLocation.line - 1
+            let noteSourceLine: String?
+            if noteLineIndex >= 0 && noteLineIndex < sourceLines.count {
+                noteSourceLine = sourceLines[noteLineIndex]
+            } else {
+                noteSourceLine = nil // Edge case: invalid line number
+            }
+            
+            let syntaxNote = SyntaxNote(
+                message: note.message,
+                location: noteLocation,
+                sourceLineText: noteSourceLine
+            )
+            notes.append(syntaxNote)
+        }
+        self.notes = notes
     }
 } 

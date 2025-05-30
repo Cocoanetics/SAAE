@@ -269,7 +269,13 @@ struct ErrorsCommand: AsyncParsableCommand {
                     if isErrorLine {
                         // Collect all pointer lines (error, notes, fix-its)
                         var pointerLines: [(String, String)] = [("error", error.message)]
-                        for note in error.notes { pointerLines.append(("note", note.message)) }
+                        for note in error.notes {
+                            var noteMsg = note.message
+                            if let loc = note.location {
+                                noteMsg += " (line: \(loc.line), column: \(loc.column))"
+                            }
+                            pointerLines.append(("note", noteMsg))
+                        }
                         if showFixits, !error.fixIts.isEmpty {
                             for fixIt in error.fixIts {
                                 pointerLines.append(("fix-it", fixIt.message))

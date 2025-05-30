@@ -195,7 +195,16 @@ extension SyntaxErrorDetail {
         
         // Use direct byte offset for more accurate positioning
         let byteOffset = diagnostic.position
-        self.location = converter.location(for: byteOffset)
+        var computedLocation = converter.location(for: byteOffset)
+        
+        // Apply heuristics to improve error positioning for better UX
+        computedLocation = Self.improveErrorPositioning(
+            originalLocation: computedLocation,
+            message: diagnostic.message,
+            sourceLines: sourceLines
+        )
+        
+        self.location = computedLocation
         self.affectedNode = diagnostic.node
         
         // Extract source line text with bounds checking
@@ -441,5 +450,60 @@ extension SyntaxErrorDetail {
         result = result.replacingOccurrences(of: "\u{000C}", with: "\\f") // Form feed
         
         return result
+    }
+    
+    /// Applies heuristics to improve error positioning for better UX
+    private static func improveErrorPositioning(originalLocation: SourceLocation, message: String, sourceLines: [String]) -> SourceLocation {
+        // Heuristic 1: "unexpected code ... in function" errors are often mispositioned by SwiftSyntax
+        // They point to the function body instead of the function signature where the actual error is
+        if message.contains("unexpected code") && message.contains("in function") {
+            return adjustFunctionSignatureError(originalLocation: originalLocation, sourceLines: sourceLines)
+        }
+        
+        // Add more heuristics here as needed in the future
+        
+        return originalLocation
+    }
+    
+    /// Adjusts error position for function signature errors that are misplaced by SwiftSyntax
+    private static func adjustFunctionSignatureError(originalLocation: SourceLocation, sourceLines: [String]) -> SourceLocation {
+        let currentLineIndex = originalLocation.line - 1 // Convert to 0-based
+        
+        // Look backwards from current position to find the function signature
+        var searchLineIndex = currentLineIndex - 1
+        let maxSearchLines = 3 // Don't search too far back
+        
+        while searchLineIndex >= 0 && (currentLineIndex - searchLineIndex) <= maxSearchLines {
+            guard searchLineIndex < sourceLines.count else { break }
+            
+            let line = sourceLines[searchLineIndex].trimmingCharacters(in: .whitespaces)
+            
+            // Check if this line contains a function signature with suspicious syntax
+            if line.hasPrefix("func ") && (line.contains(": ") || line.contains("->")) {
+                // This looks like a problematic function signature
+                // Calculate column position for the suspicious part
+                var column = 1
+                
+                // Find the position of the problematic syntax
+                if let colonRange = line.range(of: ": ") {
+                    column = line.distance(from: line.startIndex, to: colonRange.lowerBound) + 1
+                } else if let arrowRange = line.range(of: "->") {
+                    column = line.distance(from: line.startIndex, to: arrowRange.lowerBound) + 1
+                }
+                
+                // Return adjusted location pointing to the function signature
+                return SourceLocation(
+                    line: searchLineIndex + 1, // Convert back to 1-based
+                    column: column,
+                    offset: originalLocation.offset, // Keep original offset as fallback
+                    file: originalLocation.file
+                )
+            }
+            
+            searchLineIndex -= 1
+        }
+        
+        // If no function signature found, return original location
+        return originalLocation
     }
 } 

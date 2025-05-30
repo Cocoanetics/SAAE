@@ -34,22 +34,4 @@ public enum OutputFormat: String, CaseIterable {
     
     /// Interface format - Swift-like interface declarations showing clean API signatures without implementation details.
     case interface
-    
-    /// Returns a human-readable string representation of the output format.
-    ///
-    /// This property provides capitalized, display-friendly names for each format type.
-    ///
-    /// - Returns: A formatted string representation of the output format.
-    public var stringValue: String {
-        switch self {
-        case .json:
-            return "JSON"
-        case .yaml:
-            return "YAML"
-        case .markdown:
-            return "Markdown"
-        case .interface:
-            return "Interface"
-        }
-    }
 } 

@@ -380,8 +380,8 @@ public class CodeOverview {
             // Generate the declaration signature
             var declarationLine: String
             
-            // Enum cases don't show their visibility (they inherit from parent enum)
-            if decl.type == "case" {
+            // Enum cases and extensions don't show their visibility
+            if decl.type == "case" || decl.type == "extension" {
                 declarationLine = "\(indent)"
             } else {
                 declarationLine = "\(indent)\(decl.visibility) "
@@ -407,6 +407,9 @@ public class CodeOverview {
                 } else if decl.type == "case" {
                     // For enum cases, show "case" keyword but omit visibility modifier
                     declarationLine += "case \(signature)"
+                } else if decl.type == "extension" {
+                    // For extensions, use the signature which includes protocol conformances
+                    declarationLine += "extension \(signature)"
                 } else {
                     declarationLine += signature
                 }
@@ -414,14 +417,11 @@ public class CodeOverview {
                 // For container types without signatures
                 if decl.type == "case" {
                     declarationLine += "case \(decl.name)"
+                } else if decl.type == "extension" {
+                    // Extensions show without visibility modifier
+                    declarationLine += "extension \(decl.name)"
                 } else {
                     declarationLine += "\(decl.type) \(decl.name)"
-                    
-                    // Add inheritance/conformances if this is an extension
-                    if decl.type == "extension" {
-                        // Extension names already include the type being extended
-                        declarationLine = "\(indent)\(decl.visibility) extension \(decl.name)"
-                    }
                 }
             }
             

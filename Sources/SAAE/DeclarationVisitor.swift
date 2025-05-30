@@ -262,7 +262,6 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     private func processExtension(_ node: ExtensionDeclSyntax) {
         let visibility = extractVisibility(from: node)
-        guard visibility >= minVisibility else { return }
         
         currentIndex += 1
         let currentPath = generatePath()
@@ -274,15 +273,31 @@ internal class DeclarationVisitor: SyntaxVisitor {
         let modifiers = extractModifiers(from: node)
         let documentation = extractDocumentation(from: node)
         
-        // Process members of the extension
+        // Generate signature with protocol conformances if present
+        let signature: String?
+        if let inheritanceClause = node.inheritanceClause {
+            let protocols = inheritanceClause.inheritedTypes.map { $0.type.description.trimmingCharacters(in: .whitespacesAndNewlines) }
+            signature = "\(extendedType): \(protocols.joined(separator: ", "))"
+        } else {
+            signature = extendedType
+        }
+        
+        // Process members of the extension first
         let members = processMembers(of: node, basePath: currentPath, parentName: fullName)
+        
+        // Only include the extension if it has visible members OR if the extension itself meets the visibility requirement
+        guard !members.isEmpty || visibility >= minVisibility else { 
+            // Decrement the index since we're not adding this extension
+            currentIndex -= 1
+            return 
+        }
         
         let overview = DeclarationOverview(
             path: currentPath,
             type: "extension",
             name: name,
             fullName: fullName,
-            signature: nil,
+            signature: signature,
             visibility: visibility.rawValue,
             modifiers: modifiers.isEmpty ? nil : modifiers,
             attributes: attributes.isEmpty ? nil : attributes,
@@ -555,7 +570,15 @@ internal class DeclarationVisitor: SyntaxVisitor {
     // MARK: - Signature Generation
     
     private func generateFunctionSignature(_ node: FunctionDeclSyntax) -> String {
-        var signature = "func \(node.name.text)"
+        var signature = ""
+        
+        // Add modifiers (excluding visibility which is handled separately)
+        let modifiers = extractModifiers(from: node)
+        if !modifiers.isEmpty {
+            signature += modifiers.joined(separator: " ") + " "
+        }
+        
+        signature += "func \(node.name.text)"
         
         // Generic parameters
         if let genericParams = node.genericParameterClause {

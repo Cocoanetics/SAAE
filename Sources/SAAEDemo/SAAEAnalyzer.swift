@@ -1,7 +1,11 @@
 import Foundation
 import SAAE
 
-/// Handles the analysis of Swift source code files
+/// Handles the analysis of Swift source code files using the appropriate SAAE components.
+///
+/// This analyzer coordinates between single-file analysis using the SAAE class
+/// and multi-file analysis using ProjectOverview, providing a unified interface
+/// for the command-line tool.
 class SAAEAnalyzer {
     let paths: [String]
     let format: OutputFormat
@@ -111,69 +115,11 @@ class SAAEAnalyzer {
     }
     
     private func processMultipleFiles(_ fileURLs: [URL]) throws -> String {
-        if format == .json || format == .yaml {
-            // For JSON and YAML, we need to combine results differently
-            // Since we can't create a combined CodeOverview directly, we'll combine the outputs
-            var allResults: [[String: Any]] = []
-            
-            for fileURL in fileURLs {
-                let tree = try SyntaxTree(url: fileURL)
-                let overview = CodeOverview(tree: tree, minVisibility: visibility)
-                
-                // Convert to a dictionary representation
-                let result: [String: Any] = [
-                    "file": fileURL.lastPathComponent,
-                    "imports": overview.imports,
-                    "declarations": overview.declarations.map { $0.toDictionary() }
-                ]
-                allResults.append(result)
-            }
-            
-            // Combine all results
-            let combined: [String: Any] = [
-                "files": allResults
-            ]
-            
-            switch format {
-            case .json:
-                let data = try JSONSerialization.data(withJSONObject: combined, options: [.prettyPrinted, .sortedKeys])
-                return String(data: data, encoding: .utf8) ?? ""
-            case .yaml:
-                // For YAML, let's just concatenate the individual results
-                var yamlResults: [String] = []
-                for fileURL in fileURLs {
-                    let tree = try SyntaxTree(url: fileURL)
-                    let overview = CodeOverview(tree: tree, minVisibility: visibility)
-                    let yaml = try overview.yaml()
-                    yamlResults.append("# File: \(fileURL.lastPathComponent)\n\(yaml)")
-                }
-                return yamlResults.joined(separator: "\n---\n\n")
-            default:
-                fatalError("Unexpected format")
-            }
-        } else {
-            // For markdown and interface, process files individually
-            var results: [String] = []
-            
-            for fileURL in fileURLs {
-                let tree = try SyntaxTree(url: fileURL)
-                let overview = CodeOverview(tree: tree, minVisibility: visibility)
-                
-                let output: String
-                switch format {
-                case .markdown:
-                    output = overview.markdown()
-                case .interface:
-                    output = overview.interface()
-                default:
-                    fatalError("Unexpected format")
-                }
-                
-                results.append(output)
-            }
-            
-            return results.joined(separator: "\n" + String(repeating: "=", count: 80) + "\n")
-        }
+        let projectOverview = try ProjectOverview(
+            fileURLs: fileURLs,
+            minVisibility: visibility
+        )
+        return try projectOverview.generateOverview(format: format)
     }
     
     private func hasMatchingDeclarations(_ fileURL: URL, minVisibility: VisibilityLevel) -> Bool {

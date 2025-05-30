@@ -288,16 +288,8 @@ struct ErrorsCommand: AsyncParsableCommand {
                         // Fix-its (if flag is set) - same positioning style
                         if showFixits, !error.fixIts.isEmpty {
                             for fixIt in error.fixIts {
-                                var fixitMsg = "fix-it: "
-                                if fixIt.originalText.isEmpty && !fixIt.replacementText.isEmpty {
-                                    fixitMsg += "insert `\(fixIt.replacementText)`"
-                                } else if !fixIt.originalText.isEmpty && fixIt.replacementText.isEmpty {
-                                    fixitMsg += "remove `\(fixIt.originalText)`"
-                                } else if !fixIt.originalText.isEmpty && !fixIt.replacementText.isEmpty {
-                                    fixitMsg += "replace `\(fixIt.originalText)` with `\(fixIt.replacementText)`"
-                                } else {
-                                    fixitMsg += fixIt.message
-                                }
+                                // Use the properly escaped message from SyntaxFixIt instead of reconstructing
+                                let fixitMsg = "fix-it: \(fixIt.message)"
                                 let fixitLine = leadingSpaces + " | " + pipeSpaces + "`- " + fixitMsg + "\n"
                                 markdown += fixitLine
                             }

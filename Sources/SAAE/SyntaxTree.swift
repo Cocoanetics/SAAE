@@ -243,8 +243,8 @@ extension SyntaxErrorDetail {
                 switch change {
                 case .replace(let oldNode, let newNode):
                     let fixItLocation = converter.location(for: oldNode.position)
-                    let originalText = oldNode.description.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let replacementText = newNode.description.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let originalText = oldNode.description
+                    let replacementText = newNode.description
                     
                     // Generate human-readable message
                     let message = Self.generateFixItMessage(
@@ -343,13 +343,46 @@ extension SyntaxErrorDetail {
         let cleanReplacement = replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
-            return "insert `\(cleanReplacement)`"
+            // Inserting non-whitespace content
+            let escaped = escapeForDisplay(replacementText)
+            return "insert `\(escaped)`"
         } else if !cleanOriginal.isEmpty && cleanReplacement.isEmpty {
-            return "remove `\(cleanOriginal)`"
+            // Removing content, show what's being removed
+            let escaped = escapeForDisplay(originalText)
+            return "remove `\(escaped)`"
         } else if !cleanOriginal.isEmpty && !cleanReplacement.isEmpty {
-            return "replace `\(cleanOriginal)` with `\(cleanReplacement)`"
+            // Replacing non-whitespace with non-whitespace
+            let escapedOrig = escapeForDisplay(originalText)
+            let escapedRepl = escapeForDisplay(replacementText)
+            return "replace `\(escapedOrig)` with `\(escapedRepl)`"
+        } else if cleanOriginal.isEmpty && cleanReplacement.isEmpty {
+            // Both are whitespace-only, show what's happening with whitespace
+            if originalText != replacementText {
+                let escapedOrig = escapeForDisplay(originalText)
+                let escapedRepl = escapeForDisplay(replacementText)
+                return "replace `\(escapedOrig)` with `\(escapedRepl)`"
+            } else {
+                return "fix syntax error"
+            }
         } else {
             return "fix syntax error"
         }
+    }
+    
+    /// Escapes special characters in text for readable display in fix-it messages
+    private static func escapeForDisplay(_ text: String) -> String {
+        var result = text
+        
+        // Escape all types of whitespace and special characters
+        // Order matters: escape compound sequences first
+        result = result.replacingOccurrences(of: "\\", with: "\\\\") // Escape backslashes first
+        result = result.replacingOccurrences(of: "\r\n", with: "\\r\\n") // Handle Windows line endings first
+        result = result.replacingOccurrences(of: "\n", with: "\\n")
+        result = result.replacingOccurrences(of: "\r", with: "\\r") 
+        result = result.replacingOccurrences(of: "\t", with: "\\t")
+        result = result.replacingOccurrences(of: "\u{000B}", with: "\\v") // Vertical tab
+        result = result.replacingOccurrences(of: "\u{000C}", with: "\\f") // Form feed
+        
+        return result
     }
 } 

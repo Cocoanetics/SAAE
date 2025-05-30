@@ -264,7 +264,7 @@ struct ErrorsCommand: AsyncParsableCommand {
                 for (index, line) in contextLines.enumerated() {
                     let lineNumber = contextStartLine + index
                     let isErrorLine = (index == reportedLineIndex)
-                    let prefix = String(format: "%*d | ", lineNumberWidth, lineNumber)
+                    let prefix = String(format: "%*d ┃ ", lineNumberWidth, lineNumber)
                     markdown += prefix + line + "\n"
                     if isErrorLine {
                         // Collect all pointer lines (error, notes, fix-its)

@@ -255,20 +255,15 @@ struct ErrorsCommand: AsyncParsableCommand {
                 let maxLineNumber = contextStartLine + contextLines.count - 1
                 let lineNumberWidth = String(maxLineNumber).count
                 
-                // Find the actual error line by analyzing the context
+                // Use the SwiftSyntax-reported line directly (our tests prove it's accurate)
                 let reportedLineIndex = error.location.line - contextStartLine
-                let actualErrorLineIndex = findActualErrorLine(
-                    reportedLineIndex: reportedLineIndex, 
-                    contextLines: contextLines,
-                    errorMessage: error.message
-                )
-                let actualErrorLine = contextStartLine + actualErrorLineIndex
+                let actualErrorLine = error.location.line
                 
-                // Header: file:line:col: error: message (use actual error line)
+                // Header: file:line:col: error: message
                 markdown += "\(fileReport.filePath):\(actualErrorLine):\(error.location.column): error: \(error.message)\n"
                 for (index, line) in contextLines.enumerated() {
                     let lineNumber = contextStartLine + index
-                    let isErrorLine = (index == actualErrorLineIndex)
+                    let isErrorLine = (index == reportedLineIndex)
                     let prefix = String(format: "%*d | ", lineNumberWidth, lineNumber)
                     markdown += prefix + line + "\n"
                     if isErrorLine {
@@ -301,115 +296,6 @@ struct ErrorsCommand: AsyncParsableCommand {
         }
         
         return markdown
-    }
-    
-    /// Analyzes the context lines to find the actual line containing the syntax error
-    private func findActualErrorLine(reportedLineIndex: Int, contextLines: [String], errorMessage: String) -> Int {
-        // If reported line is out of bounds, use middle line
-        guard reportedLineIndex >= 0 && reportedLineIndex < contextLines.count else {
-            return max(0, contextLines.count / 2)
-        }
-        
-        // Check if reported line looks like an actual error line
-        let reportedLine = contextLines[reportedLineIndex].trimmingCharacters(in: .whitespaces)
-        
-        // If reported line contains substantial content and isn't just a comment, trust SwiftSyntax positioning
-        if !reportedLine.isEmpty && !reportedLine.hasPrefix("//") {
-            return reportedLineIndex
-        }
-        
-        // Only apply heuristics if the reported line is empty or just a comment
-        if reportedLine.isEmpty || reportedLine.hasPrefix("//") {
-            // Search backwards for a substantial line with potential syntax issues
-            for i in stride(from: reportedLineIndex - 1, through: 0, by: -1) {
-                let line = contextLines[i].trimmingCharacters(in: .whitespaces)
-                if !line.isEmpty && !line.hasPrefix("//") && containsPotentialSyntaxError(line: line, errorMessage: errorMessage) {
-                    return i
-                }
-            }
-            
-            // If no good line found above, search forwards
-            for i in (reportedLineIndex + 1)..<contextLines.count {
-                let line = contextLines[i].trimmingCharacters(in: .whitespaces)
-                if !line.isEmpty && !line.hasPrefix("//") && containsPotentialSyntaxError(line: line, errorMessage: errorMessage) {
-                    return i
-                }
-            }
-        }
-        
-        // Default: return reported line index (trust SwiftSyntax)
-        return reportedLineIndex
-    }
-    
-    /// Checks if a line contains potential syntax error patterns
-    private func containsPotentialSyntaxError(line: String, errorMessage: String) -> Bool {
-        let lowerLine = line.lowercased()
-        let lowerError = errorMessage.lowercased()
-        
-        // Function parameter errors - look for function declarations
-        if lowerError.contains("parameter") && (lowerLine.contains("func ") || lowerLine.contains("init(")) {
-            return true
-        }
-        
-        // Type annotation errors - look for variable declarations
-        if lowerError.contains("type annotation") && (lowerLine.contains("let ") || lowerLine.contains("var ")) {
-            return true
-        }
-        
-        // Missing patterns - look for incomplete declarations
-        if lowerError.contains("expected pattern") && (lowerLine.contains("let ") || lowerLine.contains("var ")) {
-            return true
-        }
-        
-        // Missing operators - look for expressions
-        if lowerError.contains("expected '='") && lowerLine.contains(":") {
-            return true
-        }
-        
-        // General syntax issues
-        if lowerLine.contains("func ") || lowerLine.contains("class ") || lowerLine.contains("struct ") || 
-           lowerLine.contains("enum ") || lowerLine.contains("let ") || lowerLine.contains("var ") {
-            return true
-        }
-        
-        return false
-    }
-    
-    /// Analyzes specific error message patterns to find the correct line
-    private func analyzeErrorPatterns(reportedLineIndex: Int, contextLines: [String], errorMessage: String) -> Int? {
-        let lowerError = errorMessage.lowercased()
-        
-        // Parameter errors: look for function declarations in previous lines
-        if lowerError.contains("parameter") || lowerError.contains("expected ':' and type") {
-            for i in stride(from: reportedLineIndex - 1, through: max(0, reportedLineIndex - 3), by: -1) {
-                let line = contextLines[i].trimmingCharacters(in: .whitespaces)
-                if line.contains("func ") || line.contains("init(") {
-                    return i
-                }
-            }
-        }
-        
-        // Type annotation errors: look for variable declarations in previous lines  
-        if lowerError.contains("type annotation") || lowerError.contains("expected ':'") {
-            for i in stride(from: reportedLineIndex - 1, through: max(0, reportedLineIndex - 2), by: -1) {
-                let line = contextLines[i].trimmingCharacters(in: .whitespaces)
-                if line.contains("let ") || line.contains("var ") {
-                    return i
-                }
-            }
-        }
-        
-        // Pattern errors: look for variable declarations
-        if lowerError.contains("expected pattern") {
-            for i in stride(from: reportedLineIndex - 1, through: max(0, reportedLineIndex - 2), by: -1) {
-                let line = contextLines[i].trimmingCharacters(in: .whitespaces)
-                if line.contains("let ") || line.contains("var ") {
-                    return i
-                }
-            }
-        }
-        
-        return nil
     }
     
     private func collectSwiftFiles(from paths: [String], recursive: Bool) throws -> [String] {

@@ -87,49 +87,11 @@ public class CodeDistributor {
             return DistributionResult(modifiedOriginalFile: originalFile, newFiles: [])
         }
         
-        if declarations.count == 1 {
-            // Only one declaration, keep original file unchanged
-            let originalContent = tree.sourceFile.description
-            let originalFile = GeneratedFile(
-                fileName: originalFileName,
-                content: originalContent,
-                imports: imports,
-                declarations: declarations
-            )
-            return DistributionResult(modifiedOriginalFile: originalFile, newFiles: [])
-        }
-        
-        // Multiple declarations: keep first, extract others
-        let firstDeclaration = declarations[0]
-        // Identify core declarations that must stay with the original file (e.g. FileOverview)
-        let coreDeclarations = declarations.dropFirst().filter { isCoreDeclaration($0) }
-        let declarationsToExtract = declarations.dropFirst().filter { !isCoreDeclaration($0) }
-        
-        // Create modified source file with extracted declarations removed
-        let modifiedSourceFile = try removeDeclarations(declarationsToExtract, from: tree.sourceFile)
-        
-        // Apply access control fixes to the modified original file (make private/fileprivate → internal)
-        let accessControlRewriter = AccessControlRewriter()
-        let fixedModifiedSourceFile = accessControlRewriter.visit(modifiedSourceFile)
-        
-        // Generate modified original file with only the first declaration (and imports)
-        let modifiedOriginalContent = fixedModifiedSourceFile.description
-        // Keep the first declaration plus any core declarations in the original file's declaration list
-        let keptDeclarations = [firstDeclaration] + coreDeclarations
-        let modifiedOriginalFile = GeneratedFile(
-            fileName: generateFileName(for: firstDeclaration, tree: tree),
-            content: modifiedOriginalContent,
-            imports: imports,
-            declarations: keptDeclarations
-        )
-        
-        // Generate new files for extracted declarations
+        // For each top-level declaration, generate a separate file
         var newFiles: [GeneratedFile] = []
-        
-        for declaration in declarationsToExtract {
+        for declaration in declarations {
             let fileName = generateFileName(for: declaration, tree: tree)
             let content = try generateFileContentForDeclaration(declaration, imports: imports, sourceFile: tree.sourceFile)
-            
             let newFile = GeneratedFile(
                 fileName: fileName,
                 content: content,
@@ -139,11 +101,12 @@ public class CodeDistributor {
             newFiles.append(newFile)
         }
         
-        return DistributionResult(modifiedOriginalFile: modifiedOriginalFile, newFiles: newFiles)
+        // No original file remains (it should be deleted by the command logic)
+        return DistributionResult(modifiedOriginalFile: nil, newFiles: newFiles)
     }
     
     /// Removes specific declarations from a source file
-    private func removeDeclarations(_ declarationsToRemove: [DeclarationOverview], from sourceFile: SourceFileSyntax) throws -> SourceFileSyntax {
+    internal func removeDeclarations(_ declarationsToRemove: [DeclarationOverview], from sourceFile: SourceFileSyntax) throws -> SourceFileSyntax {
         // Get the indices of declarations to remove (1-based paths converted to 0-based indices)
         let indicesToRemove = Set(declarationsToRemove.compactMap { declaration -> Int? in
             let pathComponents = declaration.path.split(separator: ".").compactMap { Int($0) }
@@ -187,7 +150,7 @@ public class CodeDistributor {
     }
     
     /// Generates file content for a single declaration
-    private func generateFileContentForDeclaration(_ declaration: DeclarationOverview, imports: [String], sourceFile: SourceFileSyntax) throws -> String {
+    internal func generateFileContentForDeclaration(_ declaration: DeclarationOverview, imports: [String], sourceFile: SourceFileSyntax) throws -> String {
         var content = ""
         
         // Add imports
@@ -211,7 +174,7 @@ public class CodeDistributor {
     }
     
     /// Generates appropriate filename for a declaration
-    private func generateFileName(for declaration: DeclarationOverview, tree: SyntaxTree) -> String {
+    internal func generateFileName(for declaration: DeclarationOverview, tree: SyntaxTree) -> String {
         if declaration.type == "extension" {
             return generateExtensionFileName(for: declaration, tree: tree)
         } else {
@@ -220,7 +183,7 @@ public class CodeDistributor {
     }
     
     /// Generates filename for extension declarations
-    private func generateExtensionFileName(for declaration: DeclarationOverview, tree: SyntaxTree) -> String {
+    internal func generateExtensionFileName(for declaration: DeclarationOverview, tree: SyntaxTree) -> String {
         // Try to extract the extended type name and protocol conformances
         if let extensionInfo = extractExtensionInfo(for: declaration, tree: tree) {
             if !extensionInfo.protocols.isEmpty {
@@ -238,13 +201,13 @@ public class CodeDistributor {
     }
     
     /// Information extracted from an extension declaration
-    private struct ExtensionInfo {
+    internal struct ExtensionInfo {
         let typeName: String
         let protocols: [String]
     }
     
     /// Extracts type name and protocol conformances from an extension
-    private func extractExtensionInfo(for declaration: DeclarationOverview, tree: SyntaxTree) -> ExtensionInfo? {
+    internal func extractExtensionInfo(for declaration: DeclarationOverview, tree: SyntaxTree) -> ExtensionInfo? {
         // Find the extension syntax node using the declaration path
         guard let declSyntax = findDeclarationSyntax(for: declaration, in: tree.sourceFile) else {
             return nil
@@ -269,7 +232,7 @@ public class CodeDistributor {
     }
     
     /// Finds the syntax node for a declaration using its path
-    private func findDeclarationSyntax(for declaration: DeclarationOverview, in sourceFile: SourceFileSyntax) -> DeclSyntax? {
+    internal func findDeclarationSyntax(for declaration: DeclarationOverview, in sourceFile: SourceFileSyntax) -> DeclSyntax? {
         let pathComponents = declaration.path.split(separator: ".").compactMap { Int($0) }
         
         guard let firstIndex = pathComponents.first, firstIndex > 0 else { return nil }
@@ -293,7 +256,7 @@ public class CodeDistributor {
     }
     
     /// Determines whether a declaration is considered a core infrastructure type that should never be extracted.
-    private func isCoreDeclaration(_ declaration: DeclarationOverview) -> Bool {
+    internal func isCoreDeclaration(_ declaration: DeclarationOverview) -> Bool {
         // Core infrastructure types that are referenced widely across multiple files
         let coreTypeNames: Set<String> = [
             "FileOverview",
@@ -306,3 +269,4 @@ public class CodeDistributor {
         return coreTypeNames.contains(declaration.name)
     }
 } 
+

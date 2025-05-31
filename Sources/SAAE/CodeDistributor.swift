@@ -86,7 +86,7 @@ public class CodeDistributor {
         let imports = overview.imports
         let declarations = overview.declarations
         
-        // Use SwiftSyntax to determine which declarations are types
+        // Separate type vs non-type declarations
         var typeDeclarations: [DeclarationOverview] = []
         var nonTypeDeclarations: [DeclarationOverview] = []
         for decl in declarations {
@@ -97,29 +97,37 @@ public class CodeDistributor {
             }
         }
         
-        var newFiles: [GeneratedFile] = []
+        // Build files for type declarations, merging multiple extensions with the same filename
+        var fileBuilders: [String: (content: String, declarations: [DeclarationOverview])] = [:]
+        let importHeader: String = {
+            guard !imports.isEmpty else { return "" }
+            return imports.map { "import \($0)" }.joined(separator: "\n") + "\n\n"
+        }()
+        
         for declaration in typeDeclarations {
             let fileName = generateFileName(for: declaration, tree: tree)
-            let content = try generateFileContentForDeclaration(declaration, imports: imports, sourceFile: tree.sourceFile)
-            let newFile = GeneratedFile(
-                fileName: fileName,
-                content: content,
-                imports: imports,
-                declarations: [declaration]
-            )
-            newFiles.append(newFile)
+            let declSource = generateDeclarationSource(declaration, in: tree.sourceFile)
+            if var builder = fileBuilders[fileName] {
+                builder.content += "\n\n" + declSource
+                builder.declarations.append(declaration)
+                fileBuilders[fileName] = builder
+            } else {
+                let initialContent = importHeader + declSource
+                fileBuilders[fileName] = (initialContent, [declaration])
+            }
         }
         
+        let newFiles: [GeneratedFile] = fileBuilders.map { key, value in
+            GeneratedFile(fileName: key, content: value.content, imports: imports, declarations: value.declarations)
+        }
+        
+        // Build modified original file (for non-type code)
         var modifiedOriginalFile: GeneratedFile? = nil
         if !nonTypeDeclarations.isEmpty {
             let content = try generateFileContent(imports: imports, targetDeclarations: nonTypeDeclarations, sourceFile: tree.sourceFile)
-            modifiedOriginalFile = GeneratedFile(
-                fileName: originalFileName,
-                content: content,
-                imports: imports,
-                declarations: nonTypeDeclarations
-            )
+            modifiedOriginalFile = GeneratedFile(fileName: originalFileName, content: content, imports: imports, declarations: nonTypeDeclarations)
         }
+        
         return DistributionResult(modifiedOriginalFile: modifiedOriginalFile, newFiles: newFiles)
     }
     
@@ -318,6 +326,16 @@ public class CodeDistributor {
             }
         }
         return content
+    }
+    
+    /// Generates source text for a declaration (without import headers)
+    internal func generateDeclarationSource(_ declaration: DeclarationOverview, in sourceFile: SourceFileSyntax) -> String {
+        guard let declSyntax = findDeclarationSyntax(for: declaration, in: sourceFile) else {
+            return ""
+        }
+        let rewriter = AccessControlRewriter()
+        let rewrittenDecl = rewriter.visit(declSyntax)
+        return rewrittenDecl.description.trimmingCharacters(in: .newlines)
     }
 } 
 

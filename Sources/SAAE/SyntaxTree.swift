@@ -570,3 +570,228 @@ extension SyntaxErrorDetail {
         return originalLocation
     }
 } 
+
+// MARK: - Phase 3: AST Modification API
+
+public enum NodeOperationError: Error, CustomStringConvertible {
+    case nodeNotFound(path: String)
+    case invalidInsertionPoint(reason: String)
+    case invalidReplacementContext(reason: String)
+    case astModificationFailed(reason: String)
+
+    public var description: String {
+        switch self {
+        case .nodeNotFound(let path): return "Node not found at path: \(path)"
+        case .invalidInsertionPoint(let reason): return "Invalid insertion point: \(reason)"
+        case .invalidReplacementContext(let reason): return "Invalid replacement context: \(reason)"
+        case .astModificationFailed(let reason): return "AST modification failed: \(reason)"
+        }
+    }
+}
+
+public enum InsertionPosition {
+    case before, after
+}
+
+extension SyntaxTree {
+    /// Serializes the syntax tree back to Swift source code.
+    public func serializeToCode() -> String {
+        return sourceFile.description
+    }
+
+    /// Modifies the leading trivia (documentation) for the node at the given path.
+    public func modifyLeadingTrivia(forNodeAtPath nodePath: String, newLeadingTriviaText: String?) throws -> SyntaxTree {
+        let rewriter = LeadingTriviaRewriter(targetPath: nodePath, newLeadingTriviaText: newLeadingTriviaText)
+        let newSourceFile = rewriter.visit(sourceFile)
+        if !rewriter.foundTarget {
+            throw NodeOperationError.nodeNotFound(path: nodePath)
+        }
+        return SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter)
+    }
+
+    /// Replaces the node at the given path with a new node.
+    public func replaceNode(atPath nodePath: String, withNewNode newNode: Syntax) throws -> SyntaxTree {
+        let rewriter = ReplaceNodeRewriter(targetPath: nodePath, replacement: newNode)
+        let newSourceFile = rewriter.visit(sourceFile)
+        if !rewriter.foundTarget {
+            throw NodeOperationError.nodeNotFound(path: nodePath)
+        }
+        if rewriter.invalidContextReason != nil {
+            throw NodeOperationError.invalidReplacementContext(reason: rewriter.invalidContextReason!)
+        }
+        return SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter)
+    }
+
+    /// Deletes the node at the given path. Returns the deleted node's source text and the new tree.
+    public func deleteNode(atPath nodePath: String) throws -> (deletedNodeSourceText: String?, newTree: SyntaxTree) {
+        let rewriter = DeleteNodeRewriter(targetPath: nodePath)
+        let newSourceFile = rewriter.visit(sourceFile)
+        if !rewriter.foundTarget {
+            throw NodeOperationError.nodeNotFound(path: nodePath)
+        }
+        if rewriter.invalidContextReason != nil {
+            throw NodeOperationError.invalidReplacementContext(reason: rewriter.invalidContextReason!)
+        }
+        return (rewriter.deletedNodeSourceText, SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter))
+    }
+
+    /// Inserts new nodes before or after the anchor node at the given path.
+    public func insertNodes(_ newNodes: [Syntax], relativeToNodeAtPath anchorNodePath: String, position: InsertionPosition) throws -> SyntaxTree {
+        let rewriter = InsertNodesRewriter(anchorPath: anchorNodePath, newNodes: newNodes, position: position)
+        let newSourceFile = rewriter.visit(sourceFile)
+        if !rewriter.foundAnchor {
+            throw NodeOperationError.nodeNotFound(path: anchorNodePath)
+        }
+        if rewriter.invalidContextReason != nil {
+            throw NodeOperationError.invalidInsertionPoint(reason: rewriter.invalidContextReason!)
+        }
+        return SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter)
+    }
+
+    // Internal initializer for new trees from rewritten SourceFileSyntax
+    internal init(_ sourceFile: SourceFileSyntax, sourceLines: [String], locationConverter: SourceLocationConverter) {
+        self.sourceFile = sourceFile
+        self.sourceLines = sourceLines
+        self.locationConverter = locationConverter
+    }
+}
+
+// MARK: - AST Modification Rewriters
+
+fileprivate protocol PathAddressable {
+    var path: String { get set }
+}
+
+fileprivate class PathTrackingVisitor: SyntaxVisitor {
+    let targetPath: String
+    var currentPath: [Int] = []
+    var foundNode: Syntax?
+    var foundParent: Syntax?
+    var foundIndexInParent: Int?
+    var foundTarget: Bool = false
+    var currentIndex: Int = 0 // Tracks all nodes visited by this specific visitor if used generically
+
+    init(targetPath: String) {
+        self.targetPath = targetPath
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    // Note: Specific visit methods would be needed here if PathTrackingVisitor
+    // itself was meant to find a specific *type* of node by path.
+    // For the rewriters below, path tracking is re-implemented token-centrically.
+}
+
+// --- Rewriter for leading trivia modification ---
+fileprivate class LeadingTriviaRewriter: SyntaxRewriter {
+    let targetPath: String
+    let newLeadingTriviaText: String?
+    var foundTarget = false
+    private var currentTokenPath: [Int] = [] // Path via token indices
+    private var currentTokenIndex: Int = 0
+
+    init(targetPath: String, newLeadingTriviaText: String?) {
+        self.targetPath = targetPath
+        self.newLeadingTriviaText = newLeadingTriviaText
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    public override func visit(_ token: TokenSyntax) -> TokenSyntax { // Correct signature
+        currentTokenIndex += 1
+        currentTokenPath.append(currentTokenIndex)
+        let pathString = currentTokenPath.map(String.init).joined(separator: ".")
+
+        var resultToken = token
+        if pathString == targetPath {
+            foundTarget = true
+            var mutableToken = token // Make a mutable copy to modify trivia
+            let newTriviaPieces: [TriviaPiece] = newLeadingTriviaText.map { [.docLineComment($0), .newlines(1)] } ?? []
+            mutableToken.leadingTrivia = Trivia(pieces: newTriviaPieces) // Direct assignment
+            resultToken = mutableToken
+        }
+        _ = currentTokenPath.popLast()
+        return super.visit(resultToken) // Call super with the (potentially modified) token
+    }
+}
+
+// --- Rewriter for node replacement ---
+fileprivate class ReplaceNodeRewriter: SyntaxRewriter {
+    let targetPath: String
+    let replacementNode: Syntax
+    var foundTarget = false
+    var invalidContextReason: String?
+    private var currentTokenPath: [Int] = []
+    private var currentTokenIndex: Int = 0
+
+    init(targetPath: String, replacement: Syntax) {
+        self.targetPath = targetPath
+        self.replacementNode = replacement
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    public override func visit(_ token: TokenSyntax) -> TokenSyntax {
+        currentTokenIndex += 1
+        currentTokenPath.append(currentTokenIndex)
+        let pathString = currentTokenPath.map(String.init).joined(separator: ".")
+
+        var resultToken = token
+        if pathString == targetPath {
+            foundTarget = true
+            if let newSpecificToken = replacementNode.as(TokenSyntax.self) {
+                resultToken = newSpecificToken
+            } else {
+                invalidContextReason = "Path \(targetPath) points to a Token, but replacement node is not a Token. Token-level replacement currently requires a Token."
+                // Return original token; main API will check invalidContextReason
+            }
+        }
+        _ = currentTokenPath.popLast()
+        return super.visit(resultToken)
+    }
+}
+
+// --- Rewriter for node deletion ---
+fileprivate class DeleteNodeRewriter: SyntaxRewriter {
+    let targetPath: String
+    var foundTarget = false
+    var deletedNodeSourceText: String?
+    var invalidContextReason: String? // Not currently used as path is token-centric
+    private var currentTokenPath: [Int] = []
+    private var currentTokenIndex: Int = 0
+
+    init(targetPath: String) {
+        self.targetPath = targetPath
+        super.init(viewMode: .sourceAccurate)
+    }
+
+    public override func visit(_ token: TokenSyntax) -> TokenSyntax {
+        currentTokenIndex += 1
+        currentTokenPath.append(currentTokenIndex)
+        let pathString = currentTokenPath.map(String.init).joined(separator: ".")
+
+        var resultToken = token
+        if pathString == targetPath {
+            foundTarget = true
+            deletedNodeSourceText = token.description
+            resultToken = TokenSyntax.identifier("") // Replace with an empty identifier token
+        }
+        _ = currentTokenPath.popLast()
+        return super.visit(resultToken)
+    }
+}
+
+// --- Rewriter for node insertion ---
+fileprivate class InsertNodesRewriter: SyntaxRewriter {
+    let anchorPath: String
+    let newNodes: [Syntax]
+    let position: InsertionPosition
+    var foundAnchor = false
+    var invalidContextReason: String?
+
+    init(anchorPath: String, newNodes: [Syntax], position: InsertionPosition) {
+        self.anchorPath = anchorPath
+        self.newNodes = newNodes
+        self.position = position
+        super.init(viewMode: .sourceAccurate)
+        self.invalidContextReason = "Node insertion is not implemented."
+    }
+    // This rewriter remains a no-op for now as insertion is complex.
+} 

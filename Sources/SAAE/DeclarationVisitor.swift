@@ -48,6 +48,11 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return .skipChildren
     }
     
+    override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+        processDeclaration(node, type: "actor")
+        return .skipChildren
+    }
+    
     override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
         processExtension(node)
         return .skipChildren
@@ -423,6 +428,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
             memberVisitor.parentVisibility = extractVisibility(from: classDecl)
         } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
             memberVisitor.parentVisibility = extractVisibility(from: protocolDecl)
+        } else if let actorDecl = node.as(ActorDeclSyntax.self) {
+            memberVisitor.parentVisibility = extractVisibility(from: actorDecl)
         } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
             memberVisitor.parentVisibility = extractVisibility(from: extensionDecl)
         }
@@ -444,6 +451,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
             return enumDecl.memberBlock
         } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
             return protocolDecl.memberBlock
+        } else if let actorDecl = node.as(ActorDeclSyntax.self) {
+            return actorDecl.memberBlock
         } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
             return extensionDecl.memberBlock
         }
@@ -472,6 +481,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
             modifiers = enumDecl.modifiers
         } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
             modifiers = protocolDecl.modifiers
+        } else if let actorDecl = node.as(ActorDeclSyntax.self) {
+            modifiers = actorDecl.modifiers
         } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
             modifiers = extensionDecl.modifiers
         } else if let functionDecl = node.as(FunctionDeclSyntax.self) {
@@ -516,6 +527,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
             attributes = enumDecl.attributes
         } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
             attributes = protocolDecl.attributes
+        } else if let actorDecl = node.as(ActorDeclSyntax.self) {
+            attributes = actorDecl.attributes
         } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
             attributes = extensionDecl.attributes
         } else if let functionDecl = node.as(FunctionDeclSyntax.self) {
@@ -738,6 +751,8 @@ internal class DeclarationVisitor: SyntaxVisitor {
             modifiers = enumDecl.modifiers
         } else if let protocolDecl = node.as(ProtocolDeclSyntax.self) {
             modifiers = protocolDecl.modifiers
+        } else if let actorDecl = node.as(ActorDeclSyntax.self) {
+            modifiers = actorDecl.modifiers
         } else if let extensionDecl = node.as(ExtensionDeclSyntax.self) {
             modifiers = extensionDecl.modifiers
         } else if let functionDecl = node.as(FunctionDeclSyntax.self) {

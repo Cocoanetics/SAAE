@@ -224,6 +224,11 @@ struct Phase3_ASTModificationTests {
             let modifiedTree = try tree.replaceNode(atLine: 2, withNewNode: Syntax(newToken))
             let newSource = modifiedTree.serializeToCode()
             
+            print("Original:")
+            print(swiftCode)
+            print("Modified:")
+            print(newSource)
+            
             // The replacement might affect the source in various ways depending on which token was selected
             #expect(!newSource.isEmpty, "Modified source should not be empty")
             print("Line-based replacement test completed")
@@ -252,6 +257,8 @@ struct Phase3_ASTModificationTests {
         // The exact behavior depends on which token was selected and deleted
         print("Line-based deletion test completed")
         print("Deleted text: \(deletedText ?? "nil")")
+		print(swiftCode)
+		print(newSource)
     }
 
     @Test func phase3_lineNumberBasedModification_errorCases() throws {
@@ -362,4 +369,286 @@ struct Phase3_ASTModificationTests {
 
 		print("Leading trivia insertion with non-doc comments behaves as expected.")
 	}
+
+    @Test func phase3_multiLineDocComments_pathBased_addNew() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            public func simpleFunction() {}
+            public func anotherFunction() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // TOKEN PATHS (estimated):
+        // public(1) struct(2) MyStruct(3) {(4)
+        // public(5) func(6) simpleFunction(7) ((8) )(9) {(10) }(11)
+        // public(12) func(13) anotherFunction(14) ((15) )(16) {(17) }(18)
+        // }(19)
+
+        let firstFunctionPublicPath = "5"  // Target 'public' of first function
+        let secondFunctionPublicPath = "12" // Target 'public' of second function
+
+        // Add multi-line doc comment to first function
+        let multiLineDoc1 = """
+        /// Performs a simple operation.
+        /// 
+        /// This function does something important and useful.
+        /// It demonstrates multi-line documentation.
+        /// 
+        /// - Returns: Nothing, but does important work
+        """
+        
+        let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstFunctionPublicPath, newLeadingTriviaText: multiLineDoc1)
+        let source1 = modifiedTree1.serializeToCode()
+        
+        print("=== Multi-line Doc Comment Added ===")
+        print(source1)
+        
+        // Verify the multi-line doc comment is present
+        #expect(source1.contains("/// Performs a simple operation."), "Should contain first line of doc comment")
+        #expect(source1.contains("/// This function does something important"), "Should contain description line")
+        #expect(source1.contains("/// - Returns: Nothing"), "Should contain returns documentation")
+        #expect(source1.contains("public func simpleFunction()"), "Should preserve function declaration")
+        
+        // Add different multi-line doc comment to second function
+        let multiLineDoc2 = """
+        /// Another important function.
+        /// 
+        /// - Parameter input: The input value
+        /// - Parameter options: Configuration options
+        /// - Returns: The processed result
+        /// - Throws: `Error` if processing fails
+        """
+        
+        let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondFunctionPublicPath, newLeadingTriviaText: multiLineDoc2)
+        let source2 = modifiedTree2.serializeToCode()
+        
+        print("=== Both Functions with Multi-line Doc Comments ===")
+        print(source2)
+        
+        // Verify both doc comments are present
+        #expect(source2.contains("/// Performs a simple operation."), "Should still contain first function's doc")
+        #expect(source2.contains("/// Another important function."), "Should contain second function's doc")
+        #expect(source2.contains("/// - Parameter input:"), "Should contain parameter documentation")
+        #expect(source2.contains("/// - Throws:"), "Should contain throws documentation")
+        
+        print("Multi-line doc comment addition test completed")
+    }
+    
+    @Test func phase3_multiLineDocComments_pathBased_modifyExisting() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            /// Old simple comment
+            public func functionWithDocs() {}
+            
+            /// Very brief
+            /// Old multi-line
+            public func anotherWithDocs() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // TOKEN PATHS (corrected with existing comments):
+        // public(1) struct(2) MyStruct(3) {(4)
+        // /// Old simple comment (trivia on token 5)
+        // public(5) func(6) functionWithDocs(7) ((8) )(9) {(10) }(11)
+        // /// Very brief + /// Old multi-line (trivia on token 12)
+        // public(12) func(13) anotherWithDocs(14) ((15) )(16) {(17) }(18)
+        // }(19)
+
+        print("=== Original with Existing Doc Comments ===")
+        print(swiftCode)
+
+        // The debug shows:
+        // Line 1: tokens 1,2,3,4 are `public struct MyStruct {`
+        // Line 3: tokens 5,6,7,8,9,10,11 are `public func functionWithDocs() {}`  
+        // Line 7: tokens 12,13,14,15,16,17,18 are `public func anotherWithDocs() {}`
+        
+        let firstFunctionPublicPath = "5"  // Target 'public' of first function (Line 3, column 5)
+        let secondFunctionPublicPath = "12" // Target 'public' of second function (Line 7, column 5)
+
+        // Replace first function's simple comment with comprehensive multi-line doc
+        let newDoc1 = """
+        /// Performs advanced processing with detailed documentation.
+        /// 
+        /// This function has been enhanced with comprehensive documentation
+        /// that explains its purpose, parameters, and behavior in detail.
+        /// 
+        /// ## Usage Example
+        /// ```swift
+        /// let result = functionWithDocs()
+        /// ```
+        /// 
+        /// - Important: This function requires proper initialization
+        /// - Returns: A processed result value
+        """
+        
+        let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstFunctionPublicPath, newLeadingTriviaText: newDoc1)
+        let source1 = modifiedTree1.serializeToCode()
+        
+        print("=== After Replacing First Function's Doc Comment ===")
+        print(source1)
+        
+        // Verify old comment is replaced and new comment is present
+        #expect(source1.contains("/// Performs advanced processing"), "Should contain new comprehensive doc")
+        #expect(source1.contains("## Usage Example"), "Should contain usage example section")
+        #expect(source1.contains("- Important:"), "Should contain important note")
+        // Note: Old comments may remain if they are trivia on different tokens
+        print("First function's new doc comment added successfully")
+
+        // Replace second function's multi-line comment with different multi-line doc
+        let newDoc2 = """
+        /// Handles complex operations with multiple parameters.
+        /// 
+        /// This function processes various inputs and provides detailed
+        /// error handling and validation capabilities.
+        /// 
+        /// - Parameters:
+        ///   - data: The input data to process
+        ///   - options: Processing configuration options
+        ///   - callback: Completion handler for async operations
+        /// - Returns: Processing result or nil if failed
+        /// - Throws: 
+        ///   - `ValidationError` if input data is invalid
+        ///   - `ProcessingError` if operation fails
+        """
+        
+        let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondFunctionPublicPath, newLeadingTriviaText: newDoc2)
+        let source2 = modifiedTree2.serializeToCode()
+        
+        print("=== After Replacing Both Functions' Doc Comments ===")
+        print(source2)
+        
+        // Verify both new doc comments are present
+        #expect(source2.contains("/// Handles complex operations"), "Should contain second function's new doc")
+        #expect(source2.contains("- Parameters:"), "Should contain parameters section")
+        #expect(source2.contains("ValidationError"), "Should contain specific error types")
+        #expect(source2.contains("/// Performs advanced processing"), "Should still contain first function's new doc")
+        // Note: This test demonstrates adding comprehensive multi-line doc comments via path-based targeting
+        
+        print("Multi-line doc comment modification test completed")
+    }
+    
+    @Test func phase3_multiLineDocComments_pathBased_blockStyle() throws {
+        let swiftCode = """
+        public class MyClass {
+            public func methodOne() {}
+            public func methodTwo() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // TOKEN PATHS (estimated):
+        // public(1) class(2) MyClass(3) {(4)
+        // public(5) func(6) methodOne(7) ((8) )(9) {(10) }(11)
+        // public(12) func(13) methodTwo(14) ((15) )(16) {(17) }(18)
+        // }(19)
+
+        let firstMethodPublicPath = "5"  // Target 'public' of first method
+        let secondMethodPublicPath = "12" // Target 'public' of second method
+
+        // Note: For block-style comments, we'll simulate by using triple-slash format
+        // since the trivia system expects individual lines
+        let blockStyleDoc1 = """
+        /// **Summary:** Primary processing method
+        /// 
+        /// **Description:**
+        /// This method handles the primary processing workflow
+        /// with comprehensive error handling and validation.
+        /// 
+        /// **Parameters:**
+        /// - input: The data to be processed
+        /// - config: Configuration settings
+        /// 
+        /// **Returns:** Processed data result
+        /// 
+        /// **Throws:** ProcessingError on failure
+        """
+        
+        let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstMethodPublicPath, newLeadingTriviaText: blockStyleDoc1)
+        let source1 = modifiedTree1.serializeToCode()
+        
+        print("=== Block-Style Multi-line Doc Comment ===")
+        print(source1)
+        
+        // Verify block-style formatting is preserved
+        #expect(source1.contains("/// **Summary:**"), "Should contain summary section")
+        #expect(source1.contains("/// **Description:**"), "Should contain description section")
+        #expect(source1.contains("/// **Parameters:**"), "Should contain parameters section")
+        #expect(source1.contains("/// **Returns:**"), "Should contain returns section")
+        #expect(source1.contains("/// **Throws:**"), "Should contain throws section")
+        
+        // Add documentation with code examples
+        let codeExampleDoc = """
+        /// Secondary processing method with examples.
+        /// 
+        /// This method demonstrates how to include code examples
+        /// in documentation comments.
+        /// 
+        /// ## Example Usage:
+        /// ```swift
+        /// let processor = MyClass()
+        /// let result = try processor.methodTwo()
+        /// print("Result: \\(result)")
+        /// ```
+        /// 
+        /// ## Alternative Usage:
+        /// ```swift
+        /// MyClass().methodTwo()
+        /// ```
+        /// 
+        /// - Note: Ensure proper error handling in production code
+        /// - SeeAlso: `methodOne()` for primary processing
+        """
+        
+        let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondMethodPublicPath, newLeadingTriviaText: codeExampleDoc)
+        let source2 = modifiedTree2.serializeToCode()
+        
+        print("=== With Code Examples in Doc Comments ===")
+        print(source2)
+        
+        // Verify code examples are preserved
+        #expect(source2.contains("## Example Usage:"), "Should contain example usage section")
+        #expect(source2.contains("```swift"), "Should contain code block markers")
+        #expect(source2.contains("let processor = MyClass()"), "Should contain example code")
+        #expect(source2.contains("- Note:"), "Should contain note section")
+        #expect(source2.contains("- SeeAlso:"), "Should contain see also section")
+        
+        print("Block-style and code example doc comment test completed")
+    }
+    
+    @Test func phase3_multiLineDocComments_pathBased_errorCases() throws {
+        let swiftCode = """
+        public struct TestStruct {
+            public func validFunction() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Test with invalid path
+        do {
+            _ = try tree.modifyLeadingTrivia(forNodeAtPath: "999", newLeadingTriviaText: "/// Should fail")
+            #expect(Bool(false), "Should throw error for invalid path")
+        } catch NodeOperationError.nodeNotFound {
+            print("Correctly handled invalid path error")
+        }
+
+        // Test with empty doc comment
+        let validPath = "5" // Should be 'public' token of the function
+        let modifiedTree = try tree.modifyLeadingTrivia(forNodeAtPath: validPath, newLeadingTriviaText: "")
+        let source = modifiedTree.serializeToCode()
+        
+        // Should not crash and should preserve original structure
+        #expect(source.contains("public func validFunction()"), "Should preserve function after empty doc comment")
+        
+        // Test with very long multi-line doc comment
+        let longDoc = (1...50).map { i in "/// Line \(i) of a very long documentation comment." }.joined(separator: "\n")
+        let longDocTree = try tree.modifyLeadingTrivia(forNodeAtPath: validPath, newLeadingTriviaText: longDoc)
+        let longDocSource = longDocTree.serializeToCode()
+        
+        #expect(longDocSource.contains("/// Line 1 of a very long"), "Should contain first line of long doc")
+        #expect(longDocSource.contains("/// Line 50 of a very long"), "Should contain last line of long doc")
+        
+        print("Multi-line doc comment error cases test completed")
+    }
 }

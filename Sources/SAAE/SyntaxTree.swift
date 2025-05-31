@@ -854,7 +854,11 @@ fileprivate class ReplaceNodeRewriter: SyntaxRewriter {
         if pathString == targetPath {
             foundTarget = true
             if let newSpecificToken = replacementNode.as(TokenSyntax.self) {
-                resultToken = newSpecificToken
+                // Preserve the original token's trivia when replacing
+                var modifiedToken = newSpecificToken
+                modifiedToken.leadingTrivia = token.leadingTrivia
+                modifiedToken.trailingTrivia = token.trailingTrivia
+                resultToken = modifiedToken
             } else {
                 invalidContextReason = "Path \(targetPath) points to a Token, but replacement node is not a Token. Token-level replacement currently requires a Token."
                 // Return original token; main API will check invalidContextReason

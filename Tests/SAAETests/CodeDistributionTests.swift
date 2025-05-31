@@ -89,6 +89,15 @@ struct Phase4_CodeDistributionTests {
         #expect(equatableExtFile.content.contains("extension UtilityHelper: Equatable"))
         #expect(equatableExtFile.content.contains("import Foundation"))
         #expect(equatableExtFile.content.contains("import SwiftUI"))
+        
+//        // Print original source and all resulting files
+//        print("\n=== Original Source ===\n" + sourceCode)
+//        if let original = result.originalFile {
+//            print("\n=== File: \(original.fileName) ===\n" + original.content)
+//        }
+//        for file in result.newFiles {
+//            print("\n=== File: \(file.fileName) ===\n" + file.content)
+//        }
     }
     
     @Test("Handle extension without protocol conformance")
@@ -119,6 +128,15 @@ struct Phase4_CodeDistributionTests {
         #expect(extensionFile.fileName == "DataModel+Extensions.swift")
         #expect(extensionFile.content.contains("extension DataModel"))
         #expect(extensionFile.content.contains("import Foundation"))
+        
+//        // Print original source and all resulting files
+//        print("\n=== Original Source ===\n" + sourceCode)
+//        if let original = result.originalFile {
+//            print("\n=== File: \(original.fileName) ===\n" + original.content)
+//        }
+//        for file in result.newFiles {
+//            print("\n=== File: \(file.fileName) ===\n" + file.content)
+//        }
     }
     
     @Test("Handle file with only one declaration")
@@ -141,6 +159,15 @@ struct Phase4_CodeDistributionTests {
         #expect(result.newFiles.isEmpty)
         #expect(result.originalFile!.content.contains("struct SingleModel"))
         #expect(result.originalFile!.content.contains("import Foundation"))
+        
+//        // Print original source and all resulting files
+//        print("\n=== Original Source ===\n" + sourceCode)
+//        if let original = result.originalFile {
+//            print("\n=== File: \(original.fileName) ===\n" + original.content)
+//        }
+//        for file in result.newFiles {
+//            print("\n=== File: \(file.fileName) ===\n" + file.content)
+//        }
     }
     
     @Test("Handle actors and other declaration types")
@@ -179,5 +206,14 @@ struct Phase4_CodeDistributionTests {
         // Verify actor file content
         let actorFile = try #require(filesByName["DataProcessor.swift"])
         #expect(actorFile.content.contains("actor DataProcessor"))
+        
+        // Print original source and all resulting files
+//        print("\n=== Original Source ===\n" + sourceCode)
+//        if let original = result.originalFile {
+//            print("\n=== File: \(original.fileName) ===\n" + original.content)
+//        }
+//        for file in result.newFiles {
+//            print("\n=== File: \(file.fileName) ===\n" + file.content)
+//        }
     }
 } 

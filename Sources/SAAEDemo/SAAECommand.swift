@@ -375,7 +375,6 @@ struct DistributeCommand: AsyncParsableCommand {
         }
         for filePath in swiftFiles {
             let url = URL(fileURLWithPath: filePath)
-            let fileName = url.lastPathComponent
             print("\n=== Processing: \(filePath) ===")
             let source = try String(contentsOf: url)
             let tree = try SyntaxTree(string: source)

@@ -18,10 +18,9 @@ private class AccessControlRewriter: SyntaxRewriter {
     }
 
     override func visit(_ node: DeclModifierSyntax) -> DeclModifierSyntax {
-        // Check if this is a private or fileprivate modifier (without detail)
+        // Replace private/fileprivate with internal for all declarations (types, vars, lets, funcs, enums, etc.)
         if node.name.tokenKind == .keyword(.private) || node.name.tokenKind == .keyword(.fileprivate) {
-            // Replace with internal, preserving the original trivia (spacing)
-            let newToken = TokenSyntax(.keyword(.internal), 
+            let newToken = TokenSyntax(.keyword(.internal),
                                      leadingTrivia: node.name.leadingTrivia,
                                      trailingTrivia: node.name.trailingTrivia,
                                      presence: .present)

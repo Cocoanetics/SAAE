@@ -21,7 +21,7 @@ struct SAAECommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "SAAEDemo",
         abstract: "A utility for analyzing Swift source code and generating API overviews",
-        subcommands: [AnalyzeCommand.self, ErrorsCommand.self],
+        subcommands: [AnalyzeCommand.self, ErrorsCommand.self, DistributeCommand.self],
         defaultSubcommand: AnalyzeCommand.self
     )
 }
@@ -331,6 +331,108 @@ struct ErrorsCommand: AsyncParsableCommand {
             }
         }
         
+        return swiftFiles.sorted()
+    }
+}
+
+// MARK: - Distribute Subcommand (Code Distribution Feature)
+
+struct DistributeCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "distribute",
+        abstract: "Split Swift files into separate files for each top-level declaration, preserving imports.",
+        discussion: """
+  For each input file, splits all top-level declarations into separate files (e.g., Type.swift, Type+Protocol.swift), preserving import statements. 
+  If a directory is given, all .swift files are processed (recursively if -r is set).
+  By default, writes to an output directory (or prints to stdout if not specified).
+  
+  Examples:
+    SAAEDemo distribute MyFile.swift
+    SAAEDemo distribute Sources/ --recursive -o SplitSources
+    SAAEDemo distribute file1.swift file2.swift -o out
+"""
+    )
+
+    @Argument(help: "Swift file(s) or directory to split")
+    var paths: [String]
+
+    @Flag(name: .shortAndLong, help: "Recursively search directories for Swift files")
+    var recursive: Bool = false
+
+    @Option(name: .shortAndLong, help: "Output directory (default: print to stdout)")
+    var output: String?
+
+    func run() async throws {
+        let swiftFiles = try collectSwiftFiles(from: paths, recursive: recursive)
+        guard !swiftFiles.isEmpty else {
+            print("❌ No Swift files found in the specified paths.")
+            throw ExitCode.failure
+        }
+        print("📁 Found \(swiftFiles.count) Swift file(s) to distribute...")
+        let outputDir: URL? = output.map { URL(fileURLWithPath: $0) }
+        if let dir = outputDir {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
+        }
+        for filePath in swiftFiles {
+            let url = URL(fileURLWithPath: filePath)
+            let fileName = url.lastPathComponent
+            print("\n=== Processing: \(filePath) ===")
+            let source = try String(contentsOf: url)
+            let tree = try SyntaxTree(string: source)
+            let distributor = CodeDistributor()
+            let result = try distributor.distributeKeepingFirst(tree: tree)
+            // Write or print original file
+            if let original = result.originalFile {
+                if let dir = outputDir {
+                    let outPath = dir.appendingPathComponent(original.fileName)
+                    try original.content.write(to: outPath, atomically: true, encoding: .utf8)
+                    print("  → Wrote \(original.fileName)")
+                } else {
+                    print("\n=== File: \(original.fileName) ===\n" + original.content)
+                }
+            }
+            // Write or print new files
+            for file in result.newFiles {
+                if let dir = outputDir {
+                    let outPath = dir.appendingPathComponent(file.fileName)
+                    try file.content.write(to: outPath, atomically: true, encoding: .utf8)
+                    print("  → Wrote \(file.fileName)")
+                } else {
+                    print("\n=== File: \(file.fileName) ===\n" + file.content)
+                }
+            }
+        }
+        print("\n✅ Distribution complete.")
+    }
+
+    private func collectSwiftFiles(from paths: [String], recursive: Bool) throws -> [String] {
+        var swiftFiles: [String] = []
+        for path in paths {
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) {
+                if isDirectory.boolValue {
+                    if recursive {
+                        let enumerator = FileManager.default.enumerator(atPath: path)
+                        while let file = enumerator?.nextObject() as? String {
+                            if file.hasSuffix(".swift") {
+                                swiftFiles.append(URL(fileURLWithPath: path).appendingPathComponent(file).path)
+                            }
+                        }
+                    } else {
+                        let contents = try FileManager.default.contentsOfDirectory(atPath: path)
+                        for file in contents {
+                            if file.hasSuffix(".swift") {
+                                swiftFiles.append(URL(fileURLWithPath: path).appendingPathComponent(file).path)
+                            }
+                        }
+                    }
+                } else if path.hasSuffix(".swift") {
+                    swiftFiles.append(path)
+                }
+            } else {
+                print("⚠️  Path not found: \(path)")
+            }
+        }
         return swiftFiles.sorted()
     }
 }

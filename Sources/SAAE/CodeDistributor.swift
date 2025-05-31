@@ -106,8 +106,12 @@ public class CodeDistributor {
         // Create modified source file with extracted declarations removed
         let modifiedSourceFile = try removeDeclarations(declarationsToExtract, from: tree.sourceFile)
         
+        // Apply access control fixes to the modified original file (make private/fileprivate → internal)
+        let accessControlRewriter = AccessControlRewriter()
+        let fixedModifiedSourceFile = accessControlRewriter.visit(modifiedSourceFile)
+        
         // Generate modified original file with only the first declaration (and imports)
-        let modifiedOriginalContent = modifiedSourceFile.description
+        let modifiedOriginalContent = fixedModifiedSourceFile.description
         let modifiedOriginalFile = GeneratedFile(
             fileName: originalFileName,
             content: modifiedOriginalContent,

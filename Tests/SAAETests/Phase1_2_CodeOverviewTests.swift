@@ -629,4 +629,69 @@ struct Phase1_2_CodeOverviewTests {
         
         print("✅ All specific known error positions verified!")
     }
+    
+    @Test func leadingTrivia_nonDocComments_notIncludedInDocumentation() throws {
+        let swiftCode = """
+        // This is a file-level comment
+        // It should not be considered documentation for the struct
+        
+        public struct MyStruct {
+            // This is an implementation comment
+            /// This is a doc comment for foo
+            public func foo() {}
+            // Another implementation comment
+            public func bar() {}
+        }
+        
+        // This is a trailing comment after the struct
+        """
+        let overview = try generateOverview(string: swiftCode, format: .json)
+        
+        // The file-level comments should NOT appear as documentation for MyStruct
+        #expect(!overview.contains("file-level comment"), "File-level comments should not be extracted as documentation")
+        #expect(!overview.contains("It should not be considered documentation"), "Non-doc comments should not be extracted as documentation")
+        
+        // The implementation comment should NOT be included as documentation for foo
+        #expect(!overview.contains("implementation comment"), "Implementation comments should not be extracted as documentation")
+        
+        // The doc comment should be included for foo
+        #expect(overview.contains("This is a doc comment for foo"), "Doc comment should be extracted as documentation")
+        
+        // The trailing comment after the struct should NOT be included as documentation
+        #expect(!overview.contains("trailing comment"), "Trailing comments should not be extracted as documentation")
+        
+        print("Non-doc comments are not included in documentation extraction.")
+    }
+    
+    @Test func leadingTrivia_insertion_with_nonDocComments() throws {
+        let swiftCode = """
+        // File-level comment
+        // Not documentation
+        
+        public struct MyStruct {
+            // Implementation comment
+            public func foo() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Find the line for 'public func foo()' (should be line 6)
+        let lineInfo = tree.findNodesAtLine(6)
+        #expect(!lineInfo.nodes.isEmpty, "Should find nodes on line 6")
+        let selected = lineInfo.selectedNode
+        #expect(selected != nil, "Should select a node on line 6")
+
+        // Insert a doc comment as leading trivia for the selected node
+        let modifiedTree = try tree.modifyLeadingTrivia(atLine: 6, newLeadingTriviaText: "/// Inserted doc comment")
+        let newSource = modifiedTree.serializeToCode()
+
+        // The inserted doc comment should appear immediately before 'public func foo()'
+        #expect(newSource.contains("/// Inserted doc comment\npublic func foo()"), "Inserted doc comment should appear before the function")
+
+        // The file-level and implementation comments should remain unchanged
+        #expect(newSource.contains("// File-level comment"), "File-level comment should remain")
+        #expect(newSource.contains("// Implementation comment"), "Implementation comment should remain")
+
+        print("Leading trivia insertion with non-doc comments behaves as expected.")
+    }
 } 

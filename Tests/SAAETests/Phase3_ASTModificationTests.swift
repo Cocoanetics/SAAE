@@ -149,4 +149,156 @@ struct Phase3_ASTModificationTests {
             Issue.record("Unexpected error type: \(error)")
         }
     }
+
+    @Test func phase3_lineNumberBasedModification_basic() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            /// Old doc
+            public func foo() {}
+            public func bar() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Test finding nodes at different lines
+        let line1Info = tree.findNodesAtLine(1) // "public struct MyStruct {"
+        #expect(!line1Info.nodes.isEmpty, "Should find nodes on line 1")
+        #expect(line1Info.selectedNode != nil, "Should select a node on line 1")
+
+        let line3Info = tree.findNodesAtLine(3) // "public func foo() {}"
+        #expect(!line3Info.nodes.isEmpty, "Should find nodes on line 3")
+        #expect(line3Info.selectedNode != nil, "Should select a node on line 3")
+
+        // Test modifying trivia by line number
+        let modifiedTree = try tree.modifyLeadingTrivia(atLine: 3, newLeadingTriviaText: "/// New function doc")
+        let newSource = modifiedTree.serializeToCode()
+        #expect(newSource.contains("/// New function doc"), "Should contain new documentation")
+
+        print("Line-based modification test passed!")
+    }
+
+    @Test func phase3_lineNumberBasedModification_selectionStrategies() throws {
+        let swiftCode = """
+        let x = 1; let y = 2; let z = 3
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Test different selection strategies on a line with multiple nodes
+        let firstNodeInfo = tree.findNodesAtLine(1, selection: .first)
+        let lastNodeInfo = tree.findNodesAtLine(1, selection: .last)
+        let largestNodeInfo = tree.findNodesAtLine(1, selection: .largest)
+        let smallestNodeInfo = tree.findNodesAtLine(1, selection: .smallest)
+        let columnNodeInfo = tree.findNodesAtLine(1, selection: .atColumn(15))
+
+        #expect(firstNodeInfo.selectedNode != nil, "Should select first node")
+        #expect(lastNodeInfo.selectedNode != nil, "Should select last node")
+        #expect(largestNodeInfo.selectedNode != nil, "Should select largest node")
+        #expect(smallestNodeInfo.selectedNode != nil, "Should select smallest node")
+        #expect(columnNodeInfo.selectedNode != nil, "Should select node near column 15")
+
+        // The first and last selected nodes should be different (unless there's only one node)
+        if firstNodeInfo.nodes.count > 1 {
+            #expect(firstNodeInfo.selectedNode?.column != lastNodeInfo.selectedNode?.column,
+                   "First and last selections should be different when multiple nodes exist")
+        }
+
+        print("Selection strategy test passed!")
+    }
+
+    @Test func phase3_lineNumberBasedModification_replacement() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            public func oldName() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Find a token on line 2 to replace
+        let line2Info = tree.findNodesAtLine(2)
+        #expect(line2Info.selectedNode != nil, "Should find node on line 2")
+
+        // Try to replace a token (this will work with token-level replacement)
+        // Note: We're testing the API, actual replacement depends on token selection
+        do {
+            let newToken = TokenSyntax.identifier("newName")
+            let modifiedTree = try tree.replaceNode(atLine: 2, withNewNode: Syntax(newToken))
+            let newSource = modifiedTree.serializeToCode()
+            
+            // The replacement might affect the source in various ways depending on which token was selected
+            #expect(!newSource.isEmpty, "Modified source should not be empty")
+            print("Line-based replacement test completed")
+        } catch NodeOperationError.invalidReplacementContext {
+            // This is expected if we try to replace a non-token node with a token
+            print("Line-based replacement correctly rejected invalid replacement context")
+        }
+    }
+
+    @Test func phase3_lineNumberBasedModification_deletion() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            public let x: Int
+            public let y: Int
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Delete a node on line 2
+        let (deletedText, modifiedTree) = try tree.deleteNode(atLine: 2)
+        let newSource = modifiedTree.serializeToCode()
+
+        #expect(deletedText != nil, "Should return deleted text")
+        #expect(!newSource.isEmpty, "Modified source should not be empty")
+        
+        // The exact behavior depends on which token was selected and deleted
+        print("Line-based deletion test completed")
+        print("Deleted text: \(deletedText ?? "nil")")
+    }
+
+    @Test func phase3_lineNumberBasedModification_errorCases() throws {
+        let swiftCode = """
+        public struct MyStruct {
+            public func foo() {}
+        }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Test with non-existent line numbers
+        let emptyLineInfo = tree.findNodesAtLine(10) // Line doesn't exist
+        #expect(emptyLineInfo.nodes.isEmpty, "Should find no nodes on non-existent line")
+        #expect(emptyLineInfo.selectedNode == nil, "Should not select any node on non-existent line")
+
+        // Test modification on non-existent line
+        do {
+            _ = try tree.modifyLeadingTrivia(atLine: 10, newLeadingTriviaText: "/// Doc")
+            #expect(false, "Should throw error for non-existent line")
+        } catch NodeOperationError.nodeNotFound {
+            // Expected
+            print("Correctly threw error for non-existent line")
+        }
+
+        // Test with line 0 (invalid)
+        let invalidLineInfo = tree.findNodesAtLine(0)
+        #expect(invalidLineInfo.nodes.isEmpty, "Should find no nodes on line 0")
+    }
+
+    @Test func phase3_lineNumberBasedModification_multipleNodesPerLine() throws {
+        let swiftCode = """
+        import Foundation; import SwiftSyntax
+        let a = 1, b = 2, c = 3
+        func foo() { print("hello"); return }
+        """
+        let tree = try SyntaxTree(string: swiftCode)
+
+        // Test lines with multiple significant nodes
+        for lineNumber in 1...3 {
+            let lineInfo = tree.findNodesAtLine(lineNumber)
+            print("Line \(lineNumber): found \(lineInfo.nodes.count) nodes")
+            
+            for (index, nodeInfo) in lineInfo.nodes.enumerated() {
+                print("  Node \(index): column \(nodeInfo.column), length \(nodeInfo.length), path '\(nodeInfo.path)'")
+            }
+            
+            #expect(!lineInfo.nodes.isEmpty, "Should find nodes on line \(lineNumber)")
+        }
+    }
 } 

@@ -654,6 +654,96 @@ extension SyntaxTree {
         self.sourceLines = sourceLines
         self.locationConverter = locationConverter
     }
+
+    // MARK: - Line Number-Based AST Modification API
+    
+    /// Node selection strategy when multiple nodes exist on the same line
+    public enum LineNodeSelection {
+        case first          // Select the first node on the line
+        case last           // Select the last node on the line  
+        case largest        // Select the node with the most content
+        case smallest       // Select the node with the least content
+        case atColumn(Int)  // Select the node closest to the specified column
+    }
+    
+    /// Information about nodes found at a specific line
+    public struct LineNodeInfo {
+        public let line: Int
+        public let nodes: [(node: Syntax, column: Int, length: Int, path: String)]
+        public let selectedNode: (node: Syntax, column: Int, length: Int, path: String)?
+        public let selection: LineNodeSelection
+    }
+    
+    /// Finds nodes at a specific line number with selection strategy
+    public func findNodesAtLine(_ lineNumber: Int, selection: LineNodeSelection = .first) -> LineNodeInfo {
+        let finder = LineNodeFinder(targetLine: lineNumber, locationConverter: locationConverter)
+        _ = finder.visit(sourceFile)
+        
+        let selectedNode: (node: Syntax, column: Int, length: Int, path: String)?
+        
+        switch selection {
+        case .first:
+            selectedNode = finder.nodesAtLine.first
+        case .last:
+            selectedNode = finder.nodesAtLine.last
+        case .largest:
+            selectedNode = finder.nodesAtLine.max { $0.length < $1.length }
+        case .smallest:
+            selectedNode = finder.nodesAtLine.min { $0.length < $1.length }
+        case .atColumn(let targetColumn):
+            selectedNode = finder.nodesAtLine.min { 
+                abs($0.column - targetColumn) < abs($1.column - targetColumn)
+            }
+        }
+        
+        return LineNodeInfo(
+            line: lineNumber,
+            nodes: finder.nodesAtLine,
+            selectedNode: selectedNode,
+            selection: selection
+        )
+    }
+    
+    /// Modifies the leading trivia for the node at the given line number.
+    public func modifyLeadingTrivia(atLine lineNumber: Int, newLeadingTriviaText: String?, selection: LineNodeSelection = .first) throws -> SyntaxTree {
+        let nodeInfo = findNodesAtLine(lineNumber, selection: selection)
+        guard let selectedNode = nodeInfo.selectedNode else {
+            throw NodeOperationError.nodeNotFound(path: "line \(lineNumber)")
+        }
+        
+        // Use the path from the selected node to perform the modification
+        return try modifyLeadingTrivia(forNodeAtPath: selectedNode.path, newLeadingTriviaText: newLeadingTriviaText)
+    }
+    
+    /// Replaces the node at the given line number with a new node.
+    public func replaceNode(atLine lineNumber: Int, withNewNode newNode: Syntax, selection: LineNodeSelection = .first) throws -> SyntaxTree {
+        let nodeInfo = findNodesAtLine(lineNumber, selection: selection)
+        guard let selectedNode = nodeInfo.selectedNode else {
+            throw NodeOperationError.nodeNotFound(path: "line \(lineNumber)")
+        }
+        
+        return try replaceNode(atPath: selectedNode.path, withNewNode: newNode)
+    }
+    
+    /// Deletes the node at the given line number.
+    public func deleteNode(atLine lineNumber: Int, selection: LineNodeSelection = .first) throws -> (deletedNodeSourceText: String?, newTree: SyntaxTree) {
+        let nodeInfo = findNodesAtLine(lineNumber, selection: selection)
+        guard let selectedNode = nodeInfo.selectedNode else {
+            throw NodeOperationError.nodeNotFound(path: "line \(lineNumber)")
+        }
+        
+        return try deleteNode(atPath: selectedNode.path)
+    }
+    
+    /// Inserts new nodes before or after the anchor node at the given line number.
+    public func insertNodes(_ newNodes: [Syntax], relativeToLine lineNumber: Int, position: InsertionPosition, selection: LineNodeSelection = .first) throws -> SyntaxTree {
+        let nodeInfo = findNodesAtLine(lineNumber, selection: selection)
+        guard let selectedNode = nodeInfo.selectedNode else {
+            throw NodeOperationError.nodeNotFound(path: "line \(lineNumber)")
+        }
+        
+        return try insertNodes(newNodes, relativeToNodeAtPath: selectedNode.path, position: position)
+    }
 }
 
 // MARK: - AST Modification Rewriters
@@ -794,4 +884,70 @@ fileprivate class InsertNodesRewriter: SyntaxRewriter {
         self.invalidContextReason = "Node insertion is not implemented."
     }
     // This rewriter remains a no-op for now as insertion is complex.
+}
+
+// --- Line node finder for line number-based addressing ---
+fileprivate class LineNodeFinder: SyntaxVisitor {
+    let targetLine: Int
+    let locationConverter: SourceLocationConverter
+    var nodesAtLine: [(node: Syntax, column: Int, length: Int, path: String)] = []
+    private var currentTokenPath: [Int] = []
+    private var currentTokenIndex: Int = 0
+    
+    init(targetLine: Int, locationConverter: SourceLocationConverter) {
+        self.targetLine = targetLine
+        self.locationConverter = locationConverter
+        super.init(viewMode: .sourceAccurate)
+    }
+    
+    public override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
+        currentTokenIndex += 1
+        currentTokenPath.append(currentTokenIndex)
+        
+        // Get the location of this token
+        let location = locationConverter.location(for: token.position)
+        
+        // If this token starts on our target line, record it
+        if location.line == targetLine {
+            let length = token.description.count
+            let pathString = currentTokenPath.map(String.init).joined(separator: ".")
+            
+            nodesAtLine.append((
+                node: Syntax(token),
+                column: location.column,
+                length: length,
+                path: pathString
+            ))
+        }
+        
+        _ = currentTokenPath.popLast()
+        return .visitChildren
+    }
+}
+
+// Helper class to find the path of a specific token
+fileprivate class TokenPathFinder: SyntaxVisitor {
+    let targetToken: TokenSyntax
+    var foundPath: String?
+    private var currentTokenPath: [Int] = []
+    private var currentTokenIndex: Int = 0
+    
+    init(targetToken: TokenSyntax) {
+        self.targetToken = targetToken
+        super.init(viewMode: .sourceAccurate)
+    }
+    
+    public override func visit(_ token: TokenSyntax) -> SyntaxVisitorContinueKind {
+        currentTokenIndex += 1
+        currentTokenPath.append(currentTokenIndex)
+        
+        // Check if this is our target token by comparing positions
+        if token.position == targetToken.position {
+            foundPath = currentTokenPath.map(String.init).joined(separator: ".")
+            return .skipChildren
+        }
+        
+        _ = currentTokenPath.popLast()
+        return .visitChildren
+    }
 } 

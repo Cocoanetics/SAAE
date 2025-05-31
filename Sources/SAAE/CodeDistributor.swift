@@ -3,49 +3,61 @@ import SwiftSyntax
 
 /// Syntax rewriter that converts private/fileprivate access modifiers to internal
 /// when extracting declarations to separate files
-private class AccessControlRewriter: SyntaxRewriter {
-    
+internal class AccessControlRewriter: SyntaxRewriter {
+	
 	override func visit(_ node: DeclModifierListSyntax) -> DeclModifierListSyntax {
-        let filtered = node.filter { modifier in
-            if let detail = modifier.detail,
-               detail.detail.text == "set",
-               ["private", "fileprivate", "internal"].contains(modifier.name.text) {
-                return false // Remove this modifier
-            }
-            return true
-        }
-        return filtered
-    }
-
-    override func visit(_ node: DeclModifierSyntax) -> DeclModifierSyntax {
-        // Replace private/fileprivate with internal for all declarations (types, vars, lets, funcs, enums, etc.)
-        if node.name.tokenKind == .keyword(.private) || node.name.tokenKind == .keyword(.fileprivate) {
-            let newToken = TokenSyntax(.keyword(.internal),
-                                     leadingTrivia: node.name.leadingTrivia,
-                                     trailingTrivia: node.name.trailingTrivia,
-                                     presence: .present)
-            return node.with(\.name, newToken)
-        }
-        return super.visit(node)
-    }
-    
-    // Ensure we visit all declaration types to apply access control rewriting
-    override func visit(_ node: FunctionDeclSyntax) -> DeclSyntax {
-        return super.visit(node)
-    }
-    
-    override func visit(_ node: VariableDeclSyntax) -> DeclSyntax {
-        return super.visit(node)
-    }
-    
-    override func visit(_ node: EnumDeclSyntax) -> DeclSyntax {
-        return super.visit(node)
-    }
-    
-    override func visit(_ node: ExtensionDeclSyntax) -> DeclSyntax {
-        return super.visit(node)
-    }
+		var preservedTrivia: Trivia = []
+		
+		let rewritten = node.compactMap { modifier -> DeclModifierSyntax? in
+			// Handle (private|fileprivate|internal)(set) modifiers - remove them entirely
+			if let detail = modifier.detail,
+			   detail.detail.text == "set" {
+				switch modifier.name.text {
+					case "private", "fileprivate", "internal":
+						// Remove private(set), fileprivate(set), and internal(set) entirely
+						// but preserve their leading trivia for the next modifier
+						preservedTrivia = preservedTrivia + modifier.leadingTrivia
+						return nil
+					default:
+						return modifier
+				}
+			}
+			// Handle regular private/fileprivate modifiers (without details)
+			else if modifier.detail == nil {
+				switch modifier.name.text {
+					case "private", "fileprivate":
+						// Convert private or fileprivate to internal, preserving trivia
+						let newToken = TokenSyntax(.keyword(.internal),
+												   leadingTrivia: preservedTrivia + modifier.name.leadingTrivia,
+												   trailingTrivia: modifier.name.trailingTrivia,
+												   presence: .present)
+						preservedTrivia = [] // Reset since we used it
+						return modifier.with(\.name, newToken)
+					default:
+						// Apply any preserved trivia to the next modifier
+						if !preservedTrivia.isEmpty {
+							let newToken = modifier.name.with(\.leadingTrivia, preservedTrivia + modifier.name.leadingTrivia)
+							preservedTrivia = []
+							return modifier.with(\.name, newToken)
+						}
+						return modifier
+				}
+			}
+			else {
+				// Apply any preserved trivia to this modifier
+				if !preservedTrivia.isEmpty {
+					let newToken = modifier.name.with(\.leadingTrivia, preservedTrivia + modifier.name.leadingTrivia)
+					preservedTrivia = []
+					return modifier.with(\.name, newToken)
+				}
+				return modifier
+			}
+		}
+		
+		return DeclModifierListSyntax(rewritten)
+	}
 }
+
 
 /// Result of code distribution operation
 public struct DistributionResult {

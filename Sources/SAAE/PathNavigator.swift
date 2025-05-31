@@ -1,9 +1,5 @@
 import Foundation
 
-// MARK: - Declaration Overview Metadata
-
-// MARK: - Path-Based Navigation
-
 internal struct PathNavigator {
     internal static func findDeclaration(at path: String, in declarations: [DeclarationOverview]) -> DeclarationOverview? {
         let components = path.split(separator: ".").map(String.init)

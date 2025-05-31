@@ -561,22 +561,21 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     internal func extractDocumentation<T: SyntaxProtocol>(from node: T) -> Documentation? {
         let leadingTrivia = node.leadingTrivia
-        var docText = ""
+        var docLines: [String] = []
         
         for piece in leadingTrivia {
             switch piece {
             case .docLineComment(let text):
-                if !docText.isEmpty { docText += "\n" }
-                docText += text
+                docLines.append(text)
             case .docBlockComment(let text):
-                if !docText.isEmpty { docText += "\n" }
-                docText += text
+                docLines.append(text)
             default:
                 continue
             }
         }
         
-        guard !docText.isEmpty else { return nil }
+        guard !docLines.isEmpty else { return nil }
+        let docText = docLines.joined(separator: "\n")
         return Documentation(from: docText)
     }
     

@@ -87,7 +87,9 @@ public struct Documentation: Codable {
                 .replacingOccurrences(of: "^/\\*\\*\\s*", with: "", options: .regularExpression)
                 .replacingOccurrences(of: "\\*/\\s*$", with: "", options: .regularExpression)
             
-            if cleaned.isEmpty {
+            // Don't skip empty lines if they came from documentation comments (preserve paragraph breaks)
+            let isDocComment = trimmed.hasPrefix("///") || trimmed.hasPrefix("*") || trimmed.hasPrefix("/**")
+            if cleaned.isEmpty && !isDocComment {
                 continue
             }
             

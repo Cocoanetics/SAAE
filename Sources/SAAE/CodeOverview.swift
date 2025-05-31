@@ -323,17 +323,24 @@ public class CodeOverview {
                 
                 if hasDescription {
                     let descriptionLines = documentation.description.components(separatedBy: .newlines)
-                    let nonEmptyLines = descriptionLines.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    // Don't filter out empty lines to preserve paragraph breaks
+                    let allLines = descriptionLines
                     
                     // Use /** */ format for multi-line descriptions OR when there are parameters/returns/throws
-                    let isMultiLine = nonEmptyLines.count > 1
+                    let isMultiLine = allLines.count > 1
                     let useBlockFormat = needsBlockFormat || isMultiLine
                     
                     if useBlockFormat {
                         // Use /** */ format for complex documentation or multi-line descriptions
                         interface += "\(indent)/**\n"
-                        for line in nonEmptyLines {
-                            interface += "\(indent) \(line.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                        for line in allLines {
+                            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                            if trimmedLine.isEmpty {
+                                // Preserve empty lines as paragraph breaks
+                                interface += "\(indent)\n"
+                            } else {
+                                interface += "\(indent) \(trimmedLine)\n"
+                            }
                         }
                         
                         // Add blank line before parameters/returns/throws if there's a description and parameters exist
@@ -362,7 +369,10 @@ public class CodeOverview {
                         interface += "\(indent) */\n"
                     } else {
                         // Use /// format for single-line simple descriptions
-                        interface += "\(indent)/// \(nonEmptyLines[0].trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                        let firstNonEmptyLine = allLines.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                        if let line = firstNonEmptyLine {
+                            interface += "\(indent)/// \(line.trimmingCharacters(in: .whitespacesAndNewlines))\n"
+                        }
                     }
                 } else if needsBlockFormat {
                     // Only parameters/returns/throws without description

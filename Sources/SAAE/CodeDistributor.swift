@@ -5,8 +5,20 @@ import SwiftSyntax
 /// when extracting declarations to separate files
 private class AccessControlRewriter: SyntaxRewriter {
     
+	override func visit(_ node: DeclModifierListSyntax) -> DeclModifierListSyntax {
+        let filtered = node.filter { modifier in
+            if let detail = modifier.detail,
+               detail.detail.text == "set",
+               ["private", "fileprivate", "internal"].contains(modifier.name.text) {
+                return false // Remove this modifier
+            }
+            return true
+        }
+        return filtered
+    }
+
     override func visit(_ node: DeclModifierSyntax) -> DeclModifierSyntax {
-        // Check if this is a private or fileprivate modifier
+        // Check if this is a private or fileprivate modifier (without detail)
         if node.name.tokenKind == .keyword(.private) || node.name.tokenKind == .keyword(.fileprivate) {
             // Replace with internal, preserving the original trivia (spacing)
             let newToken = TokenSyntax(.keyword(.internal), 
@@ -15,7 +27,6 @@ private class AccessControlRewriter: SyntaxRewriter {
                                      presence: .present)
             return node.with(\.name, newToken)
         }
-        
         return super.visit(node)
     }
 }

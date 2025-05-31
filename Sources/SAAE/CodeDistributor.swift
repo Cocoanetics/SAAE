@@ -1,86 +1,6 @@
 import Foundation
 import SwiftSyntax
 
-/// Syntax rewriter that converts private/fileprivate access modifiers to internal
-/// when extracting declarations to separate files
-internal class AccessControlRewriter: SyntaxRewriter {
-	
-	override func visit(_ node: DeclModifierListSyntax) -> DeclModifierListSyntax {
-		let rewritten = node.map { modifier -> DeclModifierSyntax in
-			var updatedModifier = modifier
-			// Determine if we need to update the keyword
-			if let detail = modifier.detail, detail.detail.text == "set" {
-				// Any *(set) becomes internal (detail dropped)
-				let newName = TokenSyntax(.keyword(.internal),
-										   leadingTrivia: modifier.name.leadingTrivia,
-										   trailingTrivia: ensureSpacer(modifier.name.trailingTrivia),
-										   presence: .present)
-				updatedModifier = modifier
-					.with(\.name, newName)
-					.with(\.detail, nil)
-			} else if modifier.detail == nil,
-					  ["private", "fileprivate"].contains(modifier.name.text) {
-				// Plain private/fileprivate → internal
-				let newName = TokenSyntax(.keyword(.internal),
-										   leadingTrivia: modifier.name.leadingTrivia,
-										   trailingTrivia: ensureSpacer(modifier.name.trailingTrivia),
-										   presence: .present)
-				updatedModifier = modifier.with(\.name, newName)
-			}
-			return updatedModifier
-		}
-		return DeclModifierListSyntax(rewritten)
-	}
-	
-	/// Guarantee at least a single space in trailing trivia (unless newline already present)
-	private func ensureSpacer(_ trivia: Trivia) -> Trivia {
-		// If trivia already has newline or space, keep as-is
-		for piece in trivia {
-			if case .newlines(_) = piece { return trivia }
-			if case .spaces(let n) = piece, n > 0 { return trivia }
-		}
-		// Otherwise add one space
-		return trivia + .spaces(1)
-	}
-}
-
-
-/// Result of code distribution operation
-public struct DistributionResult {
-    /// The modified original file with extracted declarations removed
-    public let modifiedOriginalFile: GeneratedFile?
-    
-    /// New files created for the extracted declarations
-    public let newFiles: [GeneratedFile]
-    
-    public init(modifiedOriginalFile: GeneratedFile?, newFiles: [GeneratedFile]) {
-        self.modifiedOriginalFile = modifiedOriginalFile
-        self.newFiles = newFiles
-    }
-}
-
-/// Represents a generated Swift source file
-public struct GeneratedFile {
-    /// The filename (including .swift extension)
-    public let fileName: String
-    
-    /// The complete source code content
-    public let content: String
-    
-    /// The import statements included in this file
-    public let imports: [String]
-    
-    /// The declarations included in this file
-    public let declarations: [DeclarationOverview]
-    
-    public init(fileName: String, content: String, imports: [String], declarations: [DeclarationOverview]) {
-        self.fileName = fileName
-        self.content = content
-        self.imports = imports
-        self.declarations = declarations
-    }
-}
-
 /// Distributes Swift declarations across multiple files
 public class CodeDistributor {
     
@@ -308,7 +228,7 @@ public class CodeDistributor {
     }
     
     /// Returns true if the given DeclSyntax is a type declaration (class, struct, enum, protocol, actor, extension)
-    private func isTypeDeclaration(_ decl: DeclSyntax) -> Bool {
+    internal func isTypeDeclaration(_ decl: DeclSyntax) -> Bool {
         return decl.is(ClassDeclSyntax.self) ||
                decl.is(StructDeclSyntax.self) ||
                decl.is(EnumDeclSyntax.self) ||
@@ -318,7 +238,7 @@ public class CodeDistributor {
     }
     
     /// Generates the complete source file content for given imports and specific target declarations
-    private func generateFileContent(imports: [String], targetDeclarations: [DeclarationOverview], sourceFile: SourceFileSyntax) throws -> String {
+    internal func generateFileContent(imports: [String], targetDeclarations: [DeclarationOverview], sourceFile: SourceFileSyntax) throws -> String {
         var content = ""
         // Add imports
         if !imports.isEmpty {
@@ -355,5 +275,4 @@ public class CodeDistributor {
         // Only trim leading/trailing whitespace, preserve internal structure
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-} 
-
+}

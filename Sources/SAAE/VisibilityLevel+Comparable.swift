@@ -1,7 +1,5 @@
 import Foundation
 
-
-
 extension VisibilityLevel: Comparable {
 	/// Compares two visibility levels based on their restrictiveness.
 	///

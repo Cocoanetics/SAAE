@@ -213,20 +213,6 @@ public class CodeDistributor {
         return declarationStatements[firstIndex - 1]
     }
     
-    /// Determines whether a declaration is considered a core infrastructure type that should never be extracted.
-    internal func isCoreDeclaration(_ declaration: DeclarationOverview) -> Bool {
-        // Core infrastructure types that are referenced widely across multiple files
-        let coreTypeNames: Set<String> = [
-            "FileOverview",
-            "DistributionResult",
-            "GeneratedFile",
-            "MultiFileCodeOverview",
-            "PathNavigator",
-            "AccessControlRewriter"
-        ]
-        return coreTypeNames.contains(declaration.name)
-    }
-    
     /// Returns true if the given DeclSyntax is a type declaration (class, struct, enum, protocol, actor, extension)
     internal func isTypeDeclaration(_ decl: DeclSyntax) -> Bool {
         return decl.is(ClassDeclSyntax.self) ||

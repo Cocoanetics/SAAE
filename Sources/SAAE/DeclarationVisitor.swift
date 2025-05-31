@@ -4,14 +4,14 @@ import SwiftSyntax
 /// Visitor class that traverses the AST and extracts declaration information
 internal class DeclarationVisitor: SyntaxVisitor {
     
-    private let minVisibility: VisibilityLevel
-    private(set) var declarations: [DeclarationOverview] = []
+    internal let minVisibility: VisibilityLevel
+    internal var declarations: [DeclarationOverview] = []
     
     // Context tracking for path generation and nesting
-    private var pathComponents: [Int] = []
-    private var currentIndex: Int = 0
-    private var parentNames: [String] = []
-    private var parentVisibility: VisibilityLevel = .internal
+    internal var pathComponents: [Int] = []
+    internal var currentIndex: Int = 0
+    internal var parentNames: [String] = []
+    internal var parentVisibility: VisibilityLevel = .internal
     
     init(minVisibility: VisibilityLevel) {
         self.minVisibility = minVisibility
@@ -233,7 +233,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     // MARK: - Processing Methods
     
-    private func processDeclaration<T: DeclSyntaxProtocol & NamedDeclSyntax>(_ node: T, type: String) {
+    internal func processDeclaration<T: DeclSyntaxProtocol & NamedDeclSyntax>(_ node: T, type: String) {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return }
         
@@ -265,7 +265,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         declarations.append(overview)
     }
     
-    private func processExtension(_ node: ExtensionDeclSyntax) {
+    internal func processExtension(_ node: ExtensionDeclSyntax) {
         let visibility = extractVisibility(from: node)
         
         currentIndex += 1
@@ -313,7 +313,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         declarations.append(overview)
     }
     
-    private func processVariable(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+    internal func processVariable(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return .skipChildren }
         
@@ -350,7 +350,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return .skipChildren
     }
     
-    private func processSubscript(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+    internal func processSubscript(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return .skipChildren }
         
@@ -380,7 +380,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return .skipChildren
     }
     
-    private func processTypeAlias(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+    internal func processTypeAlias(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
         let visibility = extractVisibility(from: node)
         guard visibility >= minVisibility else { return .skipChildren }
         
@@ -412,7 +412,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     // MARK: - Helper Methods
     
-    private func processMembers<T: SyntaxProtocol>(of node: T, basePath: String, parentName: String) -> [DeclarationOverview] {
+    internal func processMembers<T: SyntaxProtocol>(of node: T, basePath: String, parentName: String) -> [DeclarationOverview] {
         // Create a new visitor for members
         let memberVisitor = DeclarationVisitor(minVisibility: minVisibility)
         memberVisitor.pathComponents = pathComponents + [currentIndex]
@@ -442,7 +442,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return memberVisitor.declarations
     }
     
-    private func findMemberBlock<T: SyntaxProtocol>(in node: T) -> SyntaxProtocol? {
+    internal func findMemberBlock<T: SyntaxProtocol>(in node: T) -> SyntaxProtocol? {
         if let structDecl = node.as(StructDeclSyntax.self) {
             return structDecl.memberBlock
         } else if let classDecl = node.as(ClassDeclSyntax.self) {
@@ -459,17 +459,17 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return nil
     }
     
-    private func generatePath() -> String {
+    internal func generatePath() -> String {
         let components = pathComponents + [currentIndex]
         return components.map(String.init).joined(separator: ".")
     }
     
-    private func generateFullName(_ name: String) -> String {
+    internal func generateFullName(_ name: String) -> String {
         let allNames = parentNames + [name]
         return allNames.joined(separator: ".")
     }
     
-    private func extractVisibility<T: SyntaxProtocol>(from node: T) -> VisibilityLevel {
+    internal func extractVisibility<T: SyntaxProtocol>(from node: T) -> VisibilityLevel {
         // Try to extract modifiers from different declaration types
         var modifiers: DeclModifierListSyntax?
         
@@ -515,7 +515,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return .internal // Default visibility in Swift
     }
     
-    private func extractAttributes<T: SyntaxProtocol>(from node: T) -> [String] {
+    internal func extractAttributes<T: SyntaxProtocol>(from node: T) -> [String] {
         // Try to extract attributes from different declaration types
         var attributes: AttributeListSyntax?
         
@@ -559,7 +559,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return attributeStrings
     }
     
-    private func extractDocumentation<T: SyntaxProtocol>(from node: T) -> Documentation? {
+    internal func extractDocumentation<T: SyntaxProtocol>(from node: T) -> Documentation? {
         let leadingTrivia = node.leadingTrivia
         var docText = ""
         
@@ -582,7 +582,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
     
     // MARK: - Signature Generation
     
-    private func generateFunctionSignature(_ node: FunctionDeclSyntax) -> String {
+    internal func generateFunctionSignature(_ node: FunctionDeclSyntax) -> String {
         var signature = ""
         
         // Add modifiers (excluding visibility which is handled separately)
@@ -629,14 +629,14 @@ internal class DeclarationVisitor: SyntaxVisitor {
     }
     
     /// Normalizes whitespace in a string to single-line format
-    private func normalizeWhitespace(_ text: String) -> String {
+    internal func normalizeWhitespace(_ text: String) -> String {
         return text
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
     
-    private func generateVariableSignature(_ binding: PatternBindingSyntax, isLet: Bool) -> String {
+    internal func generateVariableSignature(_ binding: PatternBindingSyntax, isLet: Bool) -> String {
         var signature = isLet ? "let " : "var "
         
         if let pattern = binding.pattern.as(IdentifierPatternSyntax.self) {
@@ -669,7 +669,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return signature
     }
     
-    private func generateInitializerSignature(_ node: InitializerDeclSyntax) -> String {
+    internal func generateInitializerSignature(_ node: InitializerDeclSyntax) -> String {
         var signature = "init"
         
         if let genericParams = node.genericParameterClause {
@@ -697,7 +697,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return signature
     }
     
-    private func generateSubscriptSignature(_ node: SubscriptDeclSyntax) -> String {
+    internal func generateSubscriptSignature(_ node: SubscriptDeclSyntax) -> String {
         var signature = "subscript"
         
         if let genericParams = node.genericParameterClause {
@@ -720,7 +720,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return signature
     }
     
-    private func generateTypeAliasSignature(_ node: TypeAliasDeclSyntax) -> String {
+    internal func generateTypeAliasSignature(_ node: TypeAliasDeclSyntax) -> String {
         var signature = "typealias \(node.name.text)"
         
         if let genericParams = node.genericParameterClause {
@@ -739,7 +739,7 @@ internal class DeclarationVisitor: SyntaxVisitor {
         return signature
     }
     
-    private func extractModifiers<T: SyntaxProtocol>(from node: T) -> [String] {
+    internal func extractModifiers<T: SyntaxProtocol>(from node: T) -> [String] {
         // Try to extract modifiers from different declaration types
         var modifiers: DeclModifierListSyntax?
         
@@ -783,4 +783,4 @@ internal class DeclarationVisitor: SyntaxVisitor {
         
         return modifierStrings
     }
-} 
+}

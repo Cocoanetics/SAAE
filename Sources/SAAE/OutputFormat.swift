@@ -34,4 +34,4 @@ public enum OutputFormat: String, CaseIterable {
     
     /// Interface format - Swift-like interface declarations showing clean API signatures without implementation details.
     case interface
-} 
+}

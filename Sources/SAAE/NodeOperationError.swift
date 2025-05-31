@@ -22,4 +22,4 @@ public enum NodeOperationError: Error, CustomStringConvertible, Equatable {
         default: return false
         }
     }
-} 
+}

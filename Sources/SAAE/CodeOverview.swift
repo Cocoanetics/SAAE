@@ -37,14 +37,14 @@ import Yams
 public class CodeOverview {
     
     /// The syntax tree being analyzed.
-    private let tree: SyntaxTree
+    internal let tree: SyntaxTree
     
     /// The minimum visibility level for included declarations.
-    private let minVisibility: VisibilityLevel
+    internal let minVisibility: VisibilityLevel
     
     // Lazy-computed analysis results
-    private var _imports: [String]?
-    private var _declarations: [DeclarationOverview]?
+    internal var _imports: [String]?
+    internal var _declarations: [DeclarationOverview]?
     
     /// All declarations found in the source code, filtered by visibility level.
     ///
@@ -498,4 +498,4 @@ public class CodeOverview {
         
         return interface
     }
-} 
+}

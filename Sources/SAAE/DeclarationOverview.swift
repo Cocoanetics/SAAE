@@ -1,48 +1,5 @@
 import Foundation
 
-/// Represents a single Swift file's analysis results with path information for multi-file processing.
-///
-/// This structure is used when analyzing multiple files to maintain file-level organization
-/// and provide context about which file each declaration belongs to.
-internal struct FileOverview: Codable {
-    /// The file system path to the analyzed Swift file.
-    internal let path: String
-    
-    /// All import statements found in this file.
-    internal let imports: [String]
-    
-    /// All declarations found in this file.
-    internal let declarations: [DeclarationOverview]
-    
-    /// Creates a file overview with path and analysis results.
-    ///
-    /// - Parameters:
-    ///   - path: The file system path to the Swift file.
-    ///   - imports: Array of import statements from the file.
-    ///   - declarations: Array of declarations found in the file.
-    internal init(path: String, imports: [String], declarations: [DeclarationOverview]) {
-        self.path = path
-        self.imports = imports
-        self.declarations = declarations
-    }
-}
-
-/// Container structure for multi-file analysis results.
-///
-/// This structure organizes the results of analyzing multiple Swift files,
-/// providing a top-level container for all file-specific overviews.
-internal struct MultiFileCodeOverview: Codable {
-    /// Array of individual file analysis results.
-    internal let files: [FileOverview]
-    
-    /// Creates a multi-file overview from individual file results.
-    ///
-    /// - Parameter files: Array of file overview results.
-    internal init(files: [FileOverview]) {
-        self.files = files
-    }
-}
-
 /// Represents a comprehensive overview of a single Swift declaration.
 ///
 /// This structure captures all relevant information about a Swift declaration including
@@ -168,31 +125,3 @@ public struct DeclarationOverview: Codable {
         self.members = members
     }
 }
-
-// MARK: - Declaration Overview Metadata
-
-// MARK: - Path-Based Navigation
-
-internal struct PathNavigator {
-    internal static func findDeclaration(at path: String, in declarations: [DeclarationOverview]) -> DeclarationOverview? {
-        let components = path.split(separator: ".").map(String.init)
-        return findDeclarationRecursive(components: components, in: declarations)
-    }
-    
-    private static func findDeclarationRecursive(components: [String], in declarations: [DeclarationOverview]) -> DeclarationOverview? {
-        guard let firstComponent = components.first else { return nil }
-        
-        if let targetIndex = Int(firstComponent), targetIndex > 0 && targetIndex <= declarations.count {
-            let target = declarations[targetIndex - 1]
-            
-            if components.count == 1 {
-                return target
-            } else {
-                let remainingComponents = Array(components.dropFirst())
-                return target.members.flatMap { findDeclarationRecursive(components: remainingComponents, in: $0) }
-            }
-        }
-        
-        return nil
-    }
-} 

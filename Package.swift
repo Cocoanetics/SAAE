@@ -46,6 +46,9 @@ let package = Package(
             dependencies: [
                 "SAAE",
                 .product(name: "Testing", package: "swift-testing")
+            ],
+            resources: [
+                .copy("Resources")
             ]),
     ]
 ) 

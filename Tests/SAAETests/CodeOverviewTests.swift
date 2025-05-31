@@ -434,4 +434,34 @@ struct Phase1_2_CodeOverviewTests {
         
         #expect(totalUnexpectedCodeErrors > 0, "Expected to find at least some 'unexpected code' errors for testing")
     }
+    
+    @Test("File header comment insertion does not interfere with other comments")
+    func testFileHeaderCommentInsertion() throws {
+        let original = """
+        // Old header
+        // More header
+
+        import Foundation
+
+        /// This is a doc comment for MyClass
+        class MyClass {
+            // This is a member comment
+            func foo() {}
+        }
+
+        // Trailing comment
+        """
+        let newHeader = "// New Standard Header\n// Copyright 2024"
+        let tree = try SyntaxTree(string: original)
+        let newTree = tree.addOrReplaceFileHeaderComment(newHeader: newHeader)
+        let result = newTree.serializeToCode()
+        // The new header should appear at the very top
+        #expect(result.hasPrefix("// New Standard Header\n// Copyright 2024\n"))
+        // The doc comment for MyClass should remain
+        #expect(result.contains("/// This is a doc comment for MyClass"))
+        // The member comment should remain
+        #expect(result.contains("// This is a member comment"))
+        // The trailing comment should remain
+        #expect(result.contains("// Trailing comment"))
+    }
 } 

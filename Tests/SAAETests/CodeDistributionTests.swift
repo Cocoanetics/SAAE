@@ -44,7 +44,7 @@ struct Phase4_CodeDistributionTests {
         let tree = try SyntaxTree(string: sourceCode)
         let distributor = CodeDistributor()
         
-        let result = try distributor.distributeKeepingFirst(tree: tree)
+        let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         // Verify we have the expected number of files
         #expect(result.originalFile != nil)
@@ -120,7 +120,7 @@ struct Phase4_CodeDistributionTests {
         let tree = try SyntaxTree(string: sourceCode)
         let distributor = CodeDistributor()
         
-        let result = try distributor.distributeKeepingFirst(tree: tree)
+        let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         #expect(result.newFiles.count == 1)
         
@@ -152,7 +152,7 @@ struct Phase4_CodeDistributionTests {
         let tree = try SyntaxTree(string: sourceCode)
         let distributor = CodeDistributor()
         
-        let result = try distributor.distributeKeepingFirst(tree: tree)
+        let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         // Should keep the single declaration in original file
         #expect(result.originalFile != nil)
@@ -193,7 +193,7 @@ struct Phase4_CodeDistributionTests {
         let tree = try SyntaxTree(string: sourceCode)
         let distributor = CodeDistributor()
         
-        let result = try distributor.distributeKeepingFirst(tree: tree)
+        let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         #expect(result.newFiles.count == 3)
         

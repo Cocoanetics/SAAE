@@ -967,4 +967,65 @@ fileprivate class TokenPathFinder: SyntaxVisitor {
         _ = currentTokenPath.popLast()
         return .visitChildren
     }
+}
+
+// MARK: - File Leading Comment Rewriter
+
+/// Rewriter that adds or replaces the leading (file-level) comments at the top of a Swift file.
+fileprivate class FileLeadingCommentRewriter: SyntaxRewriter {
+    let newHeader: String
+    var didReplaceHeader = false
+    
+    init(newHeader: String) {
+        self.newHeader = newHeader
+        super.init(viewMode: .sourceAccurate)
+    }
+    
+    public override func visit(_ token: TokenSyntax) -> TokenSyntax {
+        // Only modify the very first token in the file
+        guard !didReplaceHeader else { return super.visit(token) }
+        didReplaceHeader = true
+        
+        // Build new leading trivia: header as doc or regular comments, then preserve indentation/newlines
+        var newTrivia: [TriviaPiece] = []
+        let headerLines = newHeader.split(separator: "\n", omittingEmptySubsequences: false)
+        for line in headerLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("///") {
+                newTrivia.append(.docLineComment(trimmed))
+                newTrivia.append(.newlines(1))
+            } else if trimmed.hasPrefix("//") {
+                newTrivia.append(.lineComment(trimmed))
+                newTrivia.append(.newlines(1))
+            } else if !trimmed.isEmpty {
+                newTrivia.append(.lineComment("// " + trimmed))
+                newTrivia.append(.newlines(1))
+            } else {
+                newTrivia.append(.newlines(1))
+            }
+        }
+        // Optionally, preserve any existing leading trivia that is not a comment (e.g., spaces, tabs, newlines)
+        for piece in token.leadingTrivia.pieces {
+            switch piece {
+            case .spaces, .tabs, .newlines:
+                newTrivia.append(piece)
+            default:
+                continue // skip old comments
+            }
+        }
+        var newToken = token
+        newToken.leadingTrivia = Trivia(pieces: newTrivia)
+        return super.visit(newToken)
+    }
+}
+
+extension SyntaxTree {
+    /// Adds or replaces the file-level header comment at the very top of the file.
+    /// - Parameter newHeader: The new header comment (can be multi-line, with or without // or /// prefixes).
+    /// - Returns: A new SyntaxTree with the updated file header comment.
+    public func addOrReplaceFileHeaderComment(newHeader: String) -> SyntaxTree {
+        let rewriter = FileLeadingCommentRewriter(newHeader: newHeader)
+        let newSourceFile = rewriter.visit(sourceFile)
+        return SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter)
+    }
 } 

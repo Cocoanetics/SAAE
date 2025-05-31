@@ -46,31 +46,26 @@ struct Phase4_CodeDistributionTests {
         
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
-        // Verify we have the expected number of files
-        #expect(result.modifiedOriginalFile != nil)
-        #expect(result.newFiles.count == 4)
+        // All type declarations are extracted to separate files
+        #expect(result.newFiles.count == 5)
         
-        // Verify original file keeps only the first declaration (MainModel)
-        let originalContent = result.modifiedOriginalFile!.content
-        #expect(originalContent.contains("struct MainModel"))
-        #expect(!originalContent.contains("class UtilityHelper"))
-        #expect(!originalContent.contains("enum Configuration"))
-        #expect(!originalContent.contains("extension MainModel"))
-        #expect(!originalContent.contains("extension UtilityHelper"))
-        
-        // Verify imports are preserved in original
-        #expect(originalContent.contains("import Foundation"))
-        #expect(originalContent.contains("import SwiftUI"))
+        // Original file should be nil since all declarations are types
+        #expect(result.modifiedOriginalFile == nil)
         
         // Verify new files are created with correct names and content
         let filesByName: [String: GeneratedFile] = Dictionary(uniqueKeysWithValues: result.newFiles.map { ($0.fileName, $0) })
+        
+        // Check MainModel.swift
+        let mainModelFile = try #require(filesByName["MainModel.swift"])
+        #expect(mainModelFile.content.contains("struct MainModel"))
+        #expect(mainModelFile.content.contains("import Foundation"))
+        #expect(mainModelFile.content.contains("import SwiftUI"))
         
         // Check UtilityHelper.swift
         let utilityFile = try #require(filesByName["UtilityHelper.swift"])
         #expect(utilityFile.content.contains("class UtilityHelper"))
         #expect(utilityFile.content.contains("import Foundation"))
         #expect(utilityFile.content.contains("import SwiftUI"))
-        #expect(!utilityFile.content.contains("struct MainModel"))
         
         // Check Configuration.swift
         let configFile = try #require(filesByName["Configuration.swift"])
@@ -122,10 +117,19 @@ struct Phase4_CodeDistributionTests {
         
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
-        #expect(result.newFiles.count == 1)
+        // Both struct and extension are extracted to separate files
+        #expect(result.newFiles.count == 2)
+        #expect(result.modifiedOriginalFile == nil)
         
-        let extensionFile = result.newFiles[0]
-        #expect(extensionFile.fileName == "DataModel+Extensions.swift")
+        let filesByName: [String: GeneratedFile] = Dictionary(uniqueKeysWithValues: result.newFiles.map { ($0.fileName, $0) })
+        
+        // Check DataModel.swift (the struct)
+        let structFile = try #require(filesByName["DataModel.swift"])
+        #expect(structFile.content.contains("struct DataModel"))
+        #expect(structFile.content.contains("import Foundation"))
+        
+        // Check DataModel+Extensions.swift (the extension)
+        let extensionFile = try #require(filesByName["DataModel+Extensions.swift"])
         #expect(extensionFile.content.contains("extension DataModel"))
         #expect(extensionFile.content.contains("import Foundation"))
         
@@ -154,20 +158,14 @@ struct Phase4_CodeDistributionTests {
         
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
-        // Should keep the single declaration in original file
-        #expect(result.modifiedOriginalFile != nil)
-        #expect(result.newFiles.isEmpty)
-        #expect(result.modifiedOriginalFile!.content.contains("struct SingleModel"))
-        #expect(result.modifiedOriginalFile!.content.contains("import Foundation"))
+        // Single type declaration should be extracted to separate file
+        #expect(result.modifiedOriginalFile == nil)
+        #expect(result.newFiles.count == 1)
         
-//        // Print original source and all resulting files
-//        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.modifiedOriginalFile {
-//            print("\n=== File: \(original.fileName) ===\n" + original.content)
-//        }
-//        for file in result.newFiles {
-//            print("\n=== File: \(file.fileName) ===\n" + file.content)
-//        }
+        let singleFile = result.newFiles[0]
+        #expect(singleFile.fileName == "SingleModel.swift")
+        #expect(singleFile.content.contains("struct SingleModel"))
+        #expect(singleFile.content.contains("import Foundation"))
     }
     
     @Test("Handle actors and other declaration types")
@@ -195,25 +193,23 @@ struct Phase4_CodeDistributionTests {
         
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
+        // Type declarations (class, actor, protocol) are extracted, typealias stays in original
         #expect(result.newFiles.count == 3)
+        #expect(result.modifiedOriginalFile != nil)
         
         let filesByName: [String: GeneratedFile] = Dictionary(uniqueKeysWithValues: result.newFiles.map { ($0.fileName, $0) })
         
+        #expect(filesByName["PrimaryClass.swift"] != nil)
         #expect(filesByName["DataProcessor.swift"] != nil)
         #expect(filesByName["ServiceProtocol.swift"] != nil)
-        #expect(filesByName["StringMap.swift"] != nil)
         
         // Verify actor file content
         let actorFile = try #require(filesByName["DataProcessor.swift"])
         #expect(actorFile.content.contains("actor DataProcessor"))
         
-        // Print original source and all resulting files
-//        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.modifiedOriginalFile {
-//            print("\n=== File: \(original.fileName) ===\n" + original.content)
-//        }
-//        for file in result.newFiles {
-//            print("\n=== File: \(file.fileName) ===\n" + file.content)
-//        }
+        // Verify typealias stays in original file
+        let originalContent = result.modifiedOriginalFile!.content
+        #expect(originalContent.contains("typealias StringMap"))
+        #expect(originalContent.contains("import Foundation"))
     }
 } 

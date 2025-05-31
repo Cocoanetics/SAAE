@@ -375,8 +375,6 @@ struct Phase1_2_CodeOverviewTests {
         var totalUnexpectedCodeErrors = 0
         
         for fileURL in swiftFiles {
-            let fileName = fileURL.lastPathComponent
-            
             let tree = try SyntaxTree(url: fileURL)
             let errors = tree.syntaxErrors
             

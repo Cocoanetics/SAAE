@@ -1,6 +1,25 @@
 import Foundation
 import SwiftSyntax
 
+/// Syntax rewriter that converts private/fileprivate access modifiers to internal
+/// when extracting declarations to separate files
+private class AccessControlRewriter: SyntaxRewriter {
+    
+    override func visit(_ node: DeclModifierSyntax) -> DeclModifierSyntax {
+        // Check if this is a private or fileprivate modifier
+        if node.name.tokenKind == .keyword(.private) || node.name.tokenKind == .keyword(.fileprivate) {
+            // Replace with internal, preserving the original trivia (spacing)
+            let newToken = TokenSyntax(.keyword(.internal), 
+                                     leadingTrivia: node.name.leadingTrivia,
+                                     trailingTrivia: node.name.trailingTrivia,
+                                     presence: .present)
+            return node.with(\.name, newToken)
+        }
+        
+        return super.visit(node)
+    }
+}
+
 /// Result of code distribution operation
 public struct DistributionResult {
     /// The modified original file with extracted declarations removed
@@ -174,19 +193,13 @@ public class CodeDistributor {
         
         // Add the target declaration
         if let declSyntax = findDeclarationSyntax(for: declaration, in: sourceFile) {
-            // Fix access control for extracted declarations
-            let declString = fixAccessControl(declSyntax.description)
-            content += declString
+            // Apply access control rewriting for extracted declarations
+            let rewriter = AccessControlRewriter()
+            let rewrittenDecl = rewriter.visit(declSyntax)
+            content += rewrittenDecl.description
         }
         
         return content
-    }
-    
-    /// Fixes access control levels when extracting declarations to separate files
-    private func fixAccessControl(_ declarationCode: String) -> String {
-        // Replace 'private' with 'internal' when moving to separate files
-        // This allows the extracted code to be accessible from other files in the same module
-        return declarationCode.replacingOccurrences(of: "private ", with: "internal ")
     }
     
     /// Generates appropriate filename for a declaration

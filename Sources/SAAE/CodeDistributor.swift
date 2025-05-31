@@ -159,24 +159,22 @@ public class CodeDistributor {
     /// Generates file content for a single declaration
     internal func generateFileContentForDeclaration(_ declaration: DeclarationOverview, imports: [String], sourceFile: SourceFileSyntax) throws -> String {
         var content = ""
-        
         // Add imports
-        for importName in imports {
-            content += "import \(importName)\n"
-        }
-        
         if !imports.isEmpty {
-            content += "\n"
+            for importName in imports {
+                content += "import \(importName)\n"
+            }
+            content += "\n" // Only one newline after all imports
         }
-        
         // Add the target declaration
         if let declSyntax = findDeclarationSyntax(for: declaration, in: sourceFile) {
             // Apply access control rewriting for extracted declarations
             let rewriter = AccessControlRewriter()
             let rewrittenDecl = rewriter.visit(declSyntax)
-            content += rewrittenDecl.description
+            var declString = rewrittenDecl.description
+            declString = declString.trimmingCharacters(in: .newlines)
+            content += declString
         }
-        
         return content
     }
     
@@ -290,17 +288,18 @@ public class CodeDistributor {
     private func generateFileContent(imports: [String], targetDeclarations: [DeclarationOverview], sourceFile: SourceFileSyntax) throws -> String {
         var content = ""
         // Add imports
-        for importName in imports {
-            content += "import \(importName)\n"
-        }
         if !imports.isEmpty {
-            content += "\n"
+            for importName in imports {
+                content += "import \(importName)\n"
+            }
+            content += "\n" // Only one newline after all imports
         }
         // Add only the target declarations
         for (index, targetDeclaration) in targetDeclarations.enumerated() {
             if let declSyntax = findDeclarationSyntax(for: targetDeclaration, in: sourceFile) {
-                // Add the original syntax with proper formatting
-                let declString = declSyntax.description
+                // Remove leading newlines from the declaration
+                var declString = declSyntax.description
+                declString = declString.trimmingCharacters(in: .newlines)
                 content += declString
                 if index < targetDeclarations.count - 1 {
                     content += "\n\n"

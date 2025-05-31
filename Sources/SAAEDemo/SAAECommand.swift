@@ -377,13 +377,12 @@ struct DistributeCommand: AsyncParsableCommand {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         }
         if dryRun {
-            // Group files by folder
+            var outputBuffer = ""
             let filesByFolder = Dictionary(grouping: swiftFiles) { filePath in
                 URL(fileURLWithPath: filePath).deletingLastPathComponent().path
             }
             for (folder, files) in filesByFolder.sorted(by: { $0.key < $1.key }) {
-                print("\n📂 \(folder)")
-                // Collect all output lines for this folder
+                outputBuffer += "\n📂 \(folder)\n"
                 var outputLines: [(isEdit: Bool, name: String, info: String)] = []
                 for filePath in files.sorted() {
                     let url = URL(fileURLWithPath: filePath)
@@ -405,16 +404,16 @@ struct DistributeCommand: AsyncParsableCommand {
                         outputLines.append((false, filePath, "[\(lineCount)]"))
                     }
                 }
-                // Print all lines with correct tree branches
                 for i in 0..<outputLines.count {
                     let (isEdit, name, info) = outputLines[i]
                     let isLast = i == outputLines.count - 1
                     let branch = isLast ? "└─" : "├─"
                     let icon = isEdit ? "✏️" : "🆕"
-                    print("  \(branch) \(icon)  \(name) \(info)")
+                    outputBuffer += "  \(branch) \(icon)  \(name) \(info)\n"
                 }
             }
-            print("\n✅ Distribution complete.")
+            outputBuffer += "\n\u{2705} Distribution complete.\n"
+            print(compressEmptyLines(outputBuffer))
             return
         }
         for (fileIdx, filePath) in swiftFiles.enumerated() {
@@ -451,13 +450,15 @@ struct DistributeCommand: AsyncParsableCommand {
                 // Write original file (overwrite)
                 if let original = result.originalFile {
                     let outPath = targetDir.appendingPathComponent(original.fileName)
-                    try original.content.write(to: outPath, atomically: true, encoding: .utf8)
+                    let contentWithNewline = ensureEndsWithNewline(original.content)
+                    try contentWithNewline.write(to: outPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(original.fileName)")
                 }
                 // Write new files
                 for file in result.newFiles {
                     let outPath = targetDir.appendingPathComponent(file.fileName)
-                    try file.content.write(to: outPath, atomically: true, encoding: .utf8)
+                    let contentWithNewline = ensureEndsWithNewline(file.content)
+                    try contentWithNewline.write(to: outPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(file.fileName)")
                 }
             }
@@ -509,6 +510,29 @@ struct DistributeCommand: AsyncParsableCommand {
             }
         }
         return swiftFiles.sorted()
+    }
+
+    func compressEmptyLines(_ text: String) -> String {
+        let lines = text.components(separatedBy: "\n")
+        var result: [String] = []
+        var lastWasEmpty = false
+        for line in lines {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                if !lastWasEmpty {
+                    result.append("")
+                    lastWasEmpty = true
+                }
+            } else {
+                result.append(line)
+                lastWasEmpty = false
+            }
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Ensures content ends with a newline character
+    private func ensureEndsWithNewline(_ content: String) -> String {
+        return content.hasSuffix("\n") ? content : content + "\n"
     }
 }
 

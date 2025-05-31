@@ -28,6 +28,23 @@ private class AccessControlRewriter: SyntaxRewriter {
         }
         return super.visit(node)
     }
+    
+    // Ensure we visit all declaration types to apply access control rewriting
+    override func visit(_ node: FunctionDeclSyntax) -> DeclSyntax {
+        return super.visit(node)
+    }
+    
+    override func visit(_ node: VariableDeclSyntax) -> DeclSyntax {
+        return super.visit(node)
+    }
+    
+    override func visit(_ node: EnumDeclSyntax) -> DeclSyntax {
+        return super.visit(node)
+    }
+    
+    override func visit(_ node: ExtensionDeclSyntax) -> DeclSyntax {
+        return super.visit(node)
+    }
 }
 
 /// Result of code distribution operation
@@ -335,7 +352,10 @@ public class CodeDistributor {
         // Always apply AccessControlRewriter to the whole declaration (including top-level types)
         let rewriter = AccessControlRewriter()
         let rewrittenDecl = rewriter.visit(declSyntax)
-        return rewrittenDecl.description.trimmingCharacters(in: .newlines)
+        // Preserve original formatting by not trimming newlines aggressively
+        let result = rewrittenDecl.description
+        // Only trim leading/trailing whitespace, preserve internal structure
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 } 
 

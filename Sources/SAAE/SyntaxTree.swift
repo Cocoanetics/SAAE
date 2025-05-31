@@ -573,22 +573,6 @@ extension SyntaxErrorDetail {
 
 // MARK: - Phase 3: AST Modification API
 
-public enum NodeOperationError: Error, CustomStringConvertible {
-    case nodeNotFound(path: String)
-    case invalidInsertionPoint(reason: String)
-    case invalidReplacementContext(reason: String)
-    case astModificationFailed(reason: String)
-
-    public var description: String {
-        switch self {
-        case .nodeNotFound(let path): return "Node not found at path: \(path)"
-        case .invalidInsertionPoint(let reason): return "Invalid insertion point: \(reason)"
-        case .invalidReplacementContext(let reason): return "Invalid replacement context: \(reason)"
-        case .astModificationFailed(let reason): return "AST modification failed: \(reason)"
-        }
-    }
-}
-
 public enum InsertionPosition {
     case before, after
 }

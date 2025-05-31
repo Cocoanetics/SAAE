@@ -5,7 +5,7 @@ import SwiftSyntax
 
 struct Phase3_ASTModificationTests {
 
-    @Test func phase3_astModification_basic() throws {
+    @Test func testBasicNodeReplacementAndTrivia() throws {
         // Test basic node replacement, deletion, and trivia modification
         let swiftCode = """
         public struct MyStruct {
@@ -66,7 +66,7 @@ struct Phase3_ASTModificationTests {
         #expect(!renamedBarSource.contains("public func bar()"))
     }
 
-    @Test func phase3_astModification_errors() throws {
+    @Test func testErrorCasesForNodeReplacementAndInsertion() throws {
         let swiftCode = "public struct S { public func f() {} }"
         let tree = try SyntaxTree(string: swiftCode)
         // Nonexistent path for replaceNode
@@ -89,7 +89,7 @@ struct Phase3_ASTModificationTests {
         }
     }
 
-    @Test func phase3_astModification_trivia_token_only() throws {
+    @Test func testTriviaModificationOnTokens() throws {
         // Only tokens can have trivia set
         let swiftCode = "public struct S { public func f() {} }"
         let tree = try SyntaxTree(string: swiftCode)
@@ -102,7 +102,7 @@ struct Phase3_ASTModificationTests {
         #expect(finalSource.contains("/// Token doc\npublic struct S"))
     }
 
-    @Test func phase3_astModification_delete_and_serialize() throws {
+    @Test func testDeleteNodeAndSerialize() throws {
         let swiftCode = """
         public struct S {
             public let x: Int
@@ -129,7 +129,7 @@ struct Phase3_ASTModificationTests {
         #expect(newSource.contains("public let y: Int"))
     }
 
-    @Test func phase3_astModification_replace_entire_struct() throws {
+    @Test func testReplaceEntireStructWithAnother() throws {
         let swiftCode = "public struct S { public let x: Int }"
         let tree = try SyntaxTree(string: swiftCode)
         // Path "1" will point to the "public" token in the token-centric rewriter.
@@ -150,7 +150,7 @@ struct Phase3_ASTModificationTests {
         }
     }
 
-    @Test func phase3_lineNumberBasedModification_basic() throws {
+    @Test func testLineNumberBasedNodeSelectionAndModification() throws {
         let swiftCode = """
         public struct MyStruct {
             /// Old doc
@@ -173,11 +173,9 @@ struct Phase3_ASTModificationTests {
         let modifiedTree = try tree.modifyLeadingTrivia(atLine: 3, newLeadingTriviaText: "/// New function doc")
         let newSource = modifiedTree.serializeToCode()
         #expect(newSource.contains("/// New function doc"), "Should contain new documentation")
-
-        print("Line-based modification test passed!")
     }
 
-    @Test func phase3_lineNumberBasedModification_selectionStrategies() throws {
+    @Test func testLineNumberSelectionStrategies() throws {
         let swiftCode = """
         let x = 1; let y = 2; let z = 3
         """
@@ -201,11 +199,9 @@ struct Phase3_ASTModificationTests {
             #expect(firstNodeInfo.selectedNode?.column != lastNodeInfo.selectedNode?.column,
                    "First and last selections should be different when multiple nodes exist")
         }
-
-        print("Selection strategy test passed!")
     }
 
-    @Test func phase3_lineNumberBasedModification_replacement() throws {
+    @Test func testLineNumberBasedReplacement() throws {
         let swiftCode = """
         public struct MyStruct {
             public func oldName() {}
@@ -224,21 +220,14 @@ struct Phase3_ASTModificationTests {
             let modifiedTree = try tree.replaceNode(atLine: 2, withNewNode: Syntax(newToken))
             let newSource = modifiedTree.serializeToCode()
             
-            print("Original:")
-            print(swiftCode)
-            print("Modified:")
-            print(newSource)
-            
-            // The replacement might affect the source in various ways depending on which token was selected
             #expect(!newSource.isEmpty, "Modified source should not be empty")
-            print("Line-based replacement test completed")
         } catch NodeOperationError.invalidReplacementContext {
             // This is expected if we try to replace a non-token node with a token
             print("Line-based replacement correctly rejected invalid replacement context")
         }
     }
 
-    @Test func phase3_lineNumberBasedModification_deletion() throws {
+    @Test func testLineNumberBasedDeletion() throws {
         let swiftCode = """
         public struct MyStruct {
             public let x: Int
@@ -253,15 +242,9 @@ struct Phase3_ASTModificationTests {
 
         #expect(deletedText != nil, "Should return deleted text")
         #expect(!newSource.isEmpty, "Modified source should not be empty")
-        
-        // The exact behavior depends on which token was selected and deleted
-        print("Line-based deletion test completed")
-        print("Deleted text: \(deletedText ?? "nil")")
-		print(swiftCode)
-		print(newSource)
     }
 
-    @Test func phase3_lineNumberBasedModification_errorCases() throws {
+    @Test func testLineNumberBasedErrorCases() throws {
         let swiftCode = """
         public struct MyStruct {
             public func foo() {}
@@ -277,7 +260,7 @@ struct Phase3_ASTModificationTests {
         // Test modification on non-existent line
         do {
             _ = try tree.modifyLeadingTrivia(atLine: 10, newLeadingTriviaText: "/// Doc")
-            #expect(false, "Should throw error for non-existent line")
+            #expect(Bool(false), "Should throw error for non-existent line")
         } catch NodeOperationError.nodeNotFound {
             // Expected
             print("Correctly threw error for non-existent line")
@@ -288,7 +271,7 @@ struct Phase3_ASTModificationTests {
         #expect(invalidLineInfo.nodes.isEmpty, "Should find no nodes on line 0")
     }
 
-    @Test func phase3_lineNumberBasedModification_multipleNodesPerLine() throws {
+    @Test func testLineNumberBasedMultipleNodesPerLine() throws {
         let swiftCode = """
         import Foundation; import SwiftSyntax
         let a = 1, b = 2, c = 3
@@ -305,7 +288,7 @@ struct Phase3_ASTModificationTests {
     }
 	
 	
-	@Test func leadingTrivia_nonDocComments_notIncludedInDocumentation() throws {
+	@Test func testNonDocCommentsNotIncludedInDocumentation() throws {
 		let swiftCode = """
 		// This is a file-level comment
 		// It should not be considered documentation for the struct
@@ -334,11 +317,9 @@ struct Phase3_ASTModificationTests {
 		
 		// The trailing comment after the struct should NOT be included as documentation
 		#expect(!overview.contains("trailing comment"), "Trailing comments should not be extracted as documentation")
-		
-		print("Non-doc comments are not included in documentation extraction.")
 	}
 	
-	@Test func leadingTrivia_insertion_with_nonDocComments() throws {
+	@Test func testLeadingTriviaInsertionWithNonDocComments() throws {
 		let swiftCode = """
 		// File-level comment
 		// Not documentation
@@ -366,11 +347,9 @@ struct Phase3_ASTModificationTests {
 		// The file-level and implementation comments should remain unchanged
 		#expect(newSource.contains("// File-level comment"), "File-level comment should remain")
 		#expect(newSource.contains("// Implementation comment"), "Implementation comment should remain")
-
-		print("Leading trivia insertion with non-doc comments behaves as expected.")
 	}
 
-    @Test func phase3_multiLineDocComments_pathBased_addNew() throws {
+    @Test func testAddMultiLineDocCommentsPathBased() throws {
         let swiftCode = """
         public struct MyStruct {
             public func simpleFunction() {}
@@ -401,10 +380,6 @@ struct Phase3_ASTModificationTests {
         let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstFunctionPublicPath, newLeadingTriviaText: multiLineDoc1)
         let source1 = modifiedTree1.serializeToCode()
         
-        print("=== Multi-line Doc Comment Added ===")
-        print(source1)
-        
-        // Verify the multi-line doc comment is present
         #expect(source1.contains("/// Performs a simple operation."), "Should contain first line of doc comment")
         #expect(source1.contains("/// This function does something important"), "Should contain description line")
         #expect(source1.contains("/// - Returns: Nothing"), "Should contain returns documentation")
@@ -423,19 +398,13 @@ struct Phase3_ASTModificationTests {
         let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondFunctionPublicPath, newLeadingTriviaText: multiLineDoc2)
         let source2 = modifiedTree2.serializeToCode()
         
-        print("=== Both Functions with Multi-line Doc Comments ===")
-        print(source2)
-        
-        // Verify both doc comments are present
         #expect(source2.contains("/// Performs a simple operation."), "Should still contain first function's doc")
         #expect(source2.contains("/// Another important function."), "Should contain second function's doc")
         #expect(source2.contains("/// - Parameter input:"), "Should contain parameter documentation")
         #expect(source2.contains("/// - Throws:"), "Should contain throws documentation")
-        
-        print("Multi-line doc comment addition test completed")
     }
     
-    @Test func phase3_multiLineDocComments_pathBased_modifyExisting() throws {
+    @Test func testModifyExistingMultiLineDocCommentsPathBased() throws {
         let swiftCode = """
         public struct MyStruct {
             /// Old simple comment
@@ -447,17 +416,6 @@ struct Phase3_ASTModificationTests {
         }
         """
         let tree = try SyntaxTree(string: swiftCode)
-
-        // TOKEN PATHS (corrected with existing comments):
-        // public(1) struct(2) MyStruct(3) {(4)
-        // /// Old simple comment (trivia on token 5)
-        // public(5) func(6) functionWithDocs(7) ((8) )(9) {(10) }(11)
-        // /// Very brief + /// Old multi-line (trivia on token 12)
-        // public(12) func(13) anotherWithDocs(14) ((15) )(16) {(17) }(18)
-        // }(19)
-
-        print("=== Original with Existing Doc Comments ===")
-        print(swiftCode)
 
         // The debug shows:
         // Line 1: tokens 1,2,3,4 are `public struct MyStruct {`
@@ -486,15 +444,9 @@ struct Phase3_ASTModificationTests {
         let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstFunctionPublicPath, newLeadingTriviaText: newDoc1)
         let source1 = modifiedTree1.serializeToCode()
         
-        print("=== After Replacing First Function's Doc Comment ===")
-        print(source1)
-        
-        // Verify old comment is replaced and new comment is present
         #expect(source1.contains("/// Performs advanced processing"), "Should contain new comprehensive doc")
         #expect(source1.contains("## Usage Example"), "Should contain usage example section")
         #expect(source1.contains("- Important:"), "Should contain important note")
-        // Note: Old comments may remain if they are trivia on different tokens
-        print("First function's new doc comment added successfully")
 
         // Replace second function's multi-line comment with different multi-line doc
         let newDoc2 = """
@@ -516,20 +468,13 @@ struct Phase3_ASTModificationTests {
         let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondFunctionPublicPath, newLeadingTriviaText: newDoc2)
         let source2 = modifiedTree2.serializeToCode()
         
-        print("=== After Replacing Both Functions' Doc Comments ===")
-        print(source2)
-        
-        // Verify both new doc comments are present
         #expect(source2.contains("/// Handles complex operations"), "Should contain second function's new doc")
         #expect(source2.contains("- Parameters:"), "Should contain parameters section")
         #expect(source2.contains("ValidationError"), "Should contain specific error types")
         #expect(source2.contains("/// Performs advanced processing"), "Should still contain first function's new doc")
-        // Note: This test demonstrates adding comprehensive multi-line doc comments via path-based targeting
-        
-        print("Multi-line doc comment modification test completed")
     }
     
-    @Test func phase3_multiLineDocComments_pathBased_blockStyle() throws {
+    @Test func testBlockStyleMultiLineDocCommentsPathBased() throws {
         let swiftCode = """
         public class MyClass {
             public func methodOne() {}
@@ -568,10 +513,6 @@ struct Phase3_ASTModificationTests {
         let modifiedTree1 = try tree.modifyLeadingTrivia(forNodeAtPath: firstMethodPublicPath, newLeadingTriviaText: blockStyleDoc1)
         let source1 = modifiedTree1.serializeToCode()
         
-        print("=== Block-Style Multi-line Doc Comment ===")
-        print(source1)
-        
-        // Verify block-style formatting is preserved
         #expect(source1.contains("/// **Summary:**"), "Should contain summary section")
         #expect(source1.contains("/// **Description:**"), "Should contain description section")
         #expect(source1.contains("/// **Parameters:**"), "Should contain parameters section")
@@ -604,20 +545,14 @@ struct Phase3_ASTModificationTests {
         let modifiedTree2 = try modifiedTree1.modifyLeadingTrivia(forNodeAtPath: secondMethodPublicPath, newLeadingTriviaText: codeExampleDoc)
         let source2 = modifiedTree2.serializeToCode()
         
-        print("=== With Code Examples in Doc Comments ===")
-        print(source2)
-        
-        // Verify code examples are preserved
         #expect(source2.contains("## Example Usage:"), "Should contain example usage section")
         #expect(source2.contains("```swift"), "Should contain code block markers")
         #expect(source2.contains("let processor = MyClass()"), "Should contain example code")
         #expect(source2.contains("- Note:"), "Should contain note section")
         #expect(source2.contains("- SeeAlso:"), "Should contain see also section")
-        
-        print("Block-style and code example doc comment test completed")
     }
     
-    @Test func phase3_multiLineDocComments_pathBased_errorCases() throws {
+    @Test func testMultiLineDocCommentsPathBasedErrorCases() throws {
         let swiftCode = """
         public struct TestStruct {
             public func validFunction() {}
@@ -626,19 +561,15 @@ struct Phase3_ASTModificationTests {
         let tree = try SyntaxTree(string: swiftCode)
 
         // Test with invalid path
-        do {
+        #expect(throws: NodeOperationError.nodeNotFound(path: "999")) {
             _ = try tree.modifyLeadingTrivia(forNodeAtPath: "999", newLeadingTriviaText: "/// Should fail")
-            #expect(Bool(false), "Should throw error for invalid path")
-        } catch NodeOperationError.nodeNotFound {
-            print("Correctly handled invalid path error")
         }
-
+        
         // Test with empty doc comment
         let validPath = "5" // Should be 'public' token of the function
         let modifiedTree = try tree.modifyLeadingTrivia(forNodeAtPath: validPath, newLeadingTriviaText: "")
         let source = modifiedTree.serializeToCode()
         
-        // Should not crash and should preserve original structure
         #expect(source.contains("public func validFunction()"), "Should preserve function after empty doc comment")
         
         // Test with very long multi-line doc comment
@@ -648,7 +579,5 @@ struct Phase3_ASTModificationTests {
         
         #expect(longDocSource.contains("/// Line 1 of a very long"), "Should contain first line of long doc")
         #expect(longDocSource.contains("/// Line 50 of a very long"), "Should contain last line of long doc")
-        
-        print("Multi-line doc comment error cases test completed")
     }
 }

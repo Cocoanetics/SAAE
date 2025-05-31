@@ -96,10 +96,11 @@ public class CodeOverview {
     
     /// Generates a JSON representation of the code overview.
     ///
-    /// Creates a structured JSON document containing all imports and declarations
-    /// with complete metadata including documentation, signatures, and relationships.
+    /// Creates a structured JSON document containing imports and declarations
+    /// with comprehensive metadata for each declaration including documentation,
+    /// signatures, and hierarchical relationships.
     ///
-    /// - Returns: A formatted JSON string with sorted keys and pretty printing.
+    /// - Returns: A pretty-printed JSON string.
     /// - Throws: Encoding errors if JSON generation fails.
     ///
     /// ## JSON Structure
@@ -109,16 +110,23 @@ public class CodeOverview {
     ///   "imports": ["Foundation", "SwiftUI"],
     ///   "declarations": [
     ///     {
-    ///       "name": "MyClass",
+    ///       "path": "1",
     ///       "type": "class",
+    ///       "name": "MyClass",
     ///       "visibility": "public",
+    ///       "signature": "class MyClass: BaseClass",
     ///       "members": [...]
     ///     }
     ///   ]
     /// }
     /// ```
     public func json() throws -> String {
-        let overview = LegacyCodeOverview(imports: imports, declarations: declarations)
+        struct CodeOverviewData: Codable {
+            let imports: [String]
+            let declarations: [DeclarationOverview]
+        }
+        
+        let overview = CodeOverviewData(imports: imports, declarations: declarations)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(overview)
@@ -146,7 +154,12 @@ public class CodeOverview {
     ///     members: [...]
     /// ```
     public func yaml() throws -> String {
-        let overview = LegacyCodeOverview(imports: imports, declarations: declarations)
+        struct CodeOverviewData: Codable {
+            let imports: [String]
+            let declarations: [DeclarationOverview]
+        }
+        
+        let overview = CodeOverviewData(imports: imports, declarations: declarations)
         let encoder = YAMLEncoder()
         return try encoder.encode(overview)
     }

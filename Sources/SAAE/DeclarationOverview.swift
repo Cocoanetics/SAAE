@@ -1,29 +1,5 @@
 import Foundation
 
-/// Internal structure representing a complete overview of a Swift file for legacy compatibility.
-///
-/// This structure maintains backward compatibility with earlier versions of SAAE
-/// while the codebase transitions to newer patterns.
-///
-/// - Note: This structure is internal and may be removed in future versions.
-internal struct LegacyCodeOverview: Codable {
-    /// All import statements found in the file.
-    internal let imports: [String]
-    
-    /// All top-level declarations found in the file.
-    internal let declarations: [DeclarationOverview]
-    
-    /// Creates a legacy code overview with the specified imports and declarations.
-    ///
-    /// - Parameters:
-    ///   - imports: Array of import statement strings.
-    ///   - declarations: Array of declaration overviews.
-    internal init(imports: [String], declarations: [DeclarationOverview]) {
-        self.imports = imports
-        self.declarations = declarations
-    }
-}
-
 /// Represents a single Swift file's analysis results with path information for multi-file processing.
 ///
 /// This structure is used when analyzing multiple files to maintain file-level organization
@@ -191,13 +167,6 @@ public struct DeclarationOverview: Codable {
         self.documentation = documentation
         self.members = members
     }
-}
-
-// MARK: - Output Format Selection
-
-internal enum LegacyOutputFormat {
-    case json
-    case yaml
 }
 
 // MARK: - Declaration Overview Metadata

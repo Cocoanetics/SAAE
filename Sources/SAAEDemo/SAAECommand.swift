@@ -389,7 +389,7 @@ struct DistributeCommand: AsyncParsableCommand {
                     let source = try String(contentsOf: url)
                     let tree = try SyntaxTree(string: source)
                     let distributor = CodeDistributor()
-                    let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
+                    let result = try distributor.distributeKeepingFirst(tree: tree)
                     let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
                     let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent
                     if let original = result.originalFile {
@@ -422,7 +422,7 @@ struct DistributeCommand: AsyncParsableCommand {
             let source = try String(contentsOf: url)
             let tree = try SyntaxTree(string: source)
             let distributor = CodeDistributor()
-            let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
+            let result = try distributor.distributeKeepingFirst(tree: tree)
             let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
             if dryRun {
                 let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent

@@ -1,4 +1,5 @@
 {
+  "originHash" : "df6b21fb1992b7059bb62e15c47ef8e7ec39eca3250d6340cd038a7df1a275a5",
   "pins" : [
     {
       "identity" : "swift-argument-parser",
@@ -19,15 +20,6 @@
       }
     },
     {
-      "identity" : "swift-testing",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-testing.git",
-      "state" : {
-        "revision" : "399f76dcd91e4c688ca2301fa24a8cc6d9927211",
-        "version" : "0.99.0"
-      }
-    },
-    {
       "identity" : "yams",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jpsim/Yams.git",
@@ -37,5 +29,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

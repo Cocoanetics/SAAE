@@ -75,21 +75,19 @@ public class CodeDistributor {
         let imports = overview.imports
         let declarations = overview.declarations
         
-        guard !declarations.isEmpty else {
-            // No declarations found - return original file unchanged
-            let originalContent = tree.sourceFile.description
-            let originalFile = GeneratedFile(
-                fileName: originalFileName,
-                content: originalContent,
-                imports: imports,
-                declarations: []
-            )
-            return DistributionResult(modifiedOriginalFile: originalFile, newFiles: [])
+        // Use SwiftSyntax to determine which declarations are types
+        var typeDeclarations: [DeclarationOverview] = []
+        var nonTypeDeclarations: [DeclarationOverview] = []
+        for decl in declarations {
+            if let declSyntax = findDeclarationSyntax(for: decl, in: tree.sourceFile), isTypeDeclaration(declSyntax) {
+                typeDeclarations.append(decl)
+            } else {
+                nonTypeDeclarations.append(decl)
+            }
         }
         
-        // For each top-level declaration, generate a separate file
         var newFiles: [GeneratedFile] = []
-        for declaration in declarations {
+        for declaration in typeDeclarations {
             let fileName = generateFileName(for: declaration, tree: tree)
             let content = try generateFileContentForDeclaration(declaration, imports: imports, sourceFile: tree.sourceFile)
             let newFile = GeneratedFile(
@@ -101,8 +99,17 @@ public class CodeDistributor {
             newFiles.append(newFile)
         }
         
-        // No original file remains (it should be deleted by the command logic)
-        return DistributionResult(modifiedOriginalFile: nil, newFiles: newFiles)
+        var modifiedOriginalFile: GeneratedFile? = nil
+        if !nonTypeDeclarations.isEmpty {
+            let content = try generateFileContent(imports: imports, targetDeclarations: nonTypeDeclarations, sourceFile: tree.sourceFile)
+            modifiedOriginalFile = GeneratedFile(
+                fileName: originalFileName,
+                content: content,
+                imports: imports,
+                declarations: nonTypeDeclarations
+            )
+        }
+        return DistributionResult(modifiedOriginalFile: modifiedOriginalFile, newFiles: newFiles)
     }
     
     /// Removes specific declarations from a source file
@@ -267,6 +274,40 @@ public class CodeDistributor {
             "AccessControlRewriter"
         ]
         return coreTypeNames.contains(declaration.name)
+    }
+    
+    /// Returns true if the given DeclSyntax is a type declaration (class, struct, enum, protocol, actor, extension)
+    private func isTypeDeclaration(_ decl: DeclSyntax) -> Bool {
+        return decl.is(ClassDeclSyntax.self) ||
+               decl.is(StructDeclSyntax.self) ||
+               decl.is(EnumDeclSyntax.self) ||
+               decl.is(ProtocolDeclSyntax.self) ||
+               decl.is(ActorDeclSyntax.self) ||
+               decl.is(ExtensionDeclSyntax.self)
+    }
+    
+    /// Generates the complete source file content for given imports and specific target declarations
+    private func generateFileContent(imports: [String], targetDeclarations: [DeclarationOverview], sourceFile: SourceFileSyntax) throws -> String {
+        var content = ""
+        // Add imports
+        for importName in imports {
+            content += "import \(importName)\n"
+        }
+        if !imports.isEmpty {
+            content += "\n"
+        }
+        // Add only the target declarations
+        for (index, targetDeclaration) in targetDeclarations.enumerated() {
+            if let declSyntax = findDeclarationSyntax(for: targetDeclaration, in: sourceFile) {
+                // Add the original syntax with proper formatting
+                let declString = declSyntax.description
+                content += declString
+                if index < targetDeclarations.count - 1 {
+                    content += "\n\n"
+                }
+            }
+        }
+        return content
     }
 } 
 

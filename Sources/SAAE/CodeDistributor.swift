@@ -101,7 +101,9 @@ public class CodeDistributor {
         
         // Multiple declarations: keep first, extract others
         let firstDeclaration = declarations[0]
-        let declarationsToExtract = Array(declarations.dropFirst())
+        // Identify core declarations that must stay with the original file (e.g. FileOverview)
+        let coreDeclarations = declarations.dropFirst().filter { isCoreDeclaration($0) }
+        let declarationsToExtract = declarations.dropFirst().filter { !isCoreDeclaration($0) }
         
         // Create modified source file with extracted declarations removed
         let modifiedSourceFile = try removeDeclarations(declarationsToExtract, from: tree.sourceFile)
@@ -112,11 +114,13 @@ public class CodeDistributor {
         
         // Generate modified original file with only the first declaration (and imports)
         let modifiedOriginalContent = fixedModifiedSourceFile.description
+        // Keep the first declaration plus any core declarations in the original file's declaration list
+        let keptDeclarations = [firstDeclaration] + coreDeclarations
         let modifiedOriginalFile = GeneratedFile(
-            fileName: originalFileName,
+            fileName: generateFileName(for: firstDeclaration, tree: tree),
             content: modifiedOriginalContent,
             imports: imports,
-            declarations: [firstDeclaration]
+            declarations: keptDeclarations
         )
         
         // Generate new files for extracted declarations
@@ -286,5 +290,19 @@ public class CodeDistributor {
         guard firstIndex <= declarationStatements.count else { return nil }
         
         return declarationStatements[firstIndex - 1]
+    }
+    
+    /// Determines whether a declaration is considered a core infrastructure type that should never be extracted.
+    private func isCoreDeclaration(_ declaration: DeclarationOverview) -> Bool {
+        // Core infrastructure types that are referenced widely across multiple files
+        let coreTypeNames: Set<String> = [
+            "FileOverview",
+            "DistributionResult",
+            "GeneratedFile",
+            "MultiFileCodeOverview",
+            "PathNavigator",
+            "AccessControlRewriter"
+        ]
+        return coreTypeNames.contains(declaration.name)
     }
 } 

@@ -449,10 +449,16 @@ struct DistributeCommand: AsyncParsableCommand {
             } else {
                 // Write original file (overwrite)
                 if let original = result.modifiedOriginalFile {
-                    let outPath = targetDir.appendingPathComponent(original.fileName)
+                    let originalPath = url // existing file path
+                    let newPath = targetDir.appendingPathComponent(original.fileName)
                     let contentWithNewline = ensureEndsWithNewline(original.content)
-                    try contentWithNewline.write(to: outPath, atomically: true, encoding: .utf8)
+                    try contentWithNewline.write(to: newPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(original.fileName)")
+                    // If the filename changed, delete the old file to complete the rename
+                    if originalPath.lastPathComponent != original.fileName {
+                        try? FileManager.default.removeItem(at: originalPath)
+                        print("  ⨂ Deleted old file \(originalPath.lastPathComponent)")
+                    }
                 }
                 // Write new files
                 for file in result.newFiles {
@@ -533,6 +539,35 @@ struct DistributeCommand: AsyncParsableCommand {
     /// Ensures content ends with a newline character
     private func ensureEndsWithNewline(_ content: String) -> String {
         return content.hasSuffix("\n") ? content : content + "\n"
+    }
+
+    // MARK: - Conflict Detection
+    /// Returns true if any file in the distribution result would overwrite an
+    /// existing file that is *not* the original file we are processing.
+    private func hasFileConflicts(result: DistributionResult, originalURL: URL, targetDir: URL) -> Bool {
+        var conflicts: [String] = []
+        let fm = FileManager.default
+        // Helper to check path
+        func pathExists(_ fileName: String) -> Bool {
+            fm.fileExists(atPath: targetDir.appendingPathComponent(fileName).path)
+        }
+        // Check modified original file (renamed)
+        if let original = result.modifiedOriginalFile {
+            let newName = original.fileName
+            if newName != originalURL.lastPathComponent && pathExists(newName) {
+                conflicts.append(newName)
+            }
+        }
+        // Check new files
+        for file in result.newFiles {
+            if pathExists(file.fileName) {
+                conflicts.append(file.fileName)
+            }
+        }
+        if !conflicts.isEmpty {
+            print("⚠️  File conflict(s) detected: \(conflicts.joined(separator: ", "))")
+        }
+        return !conflicts.isEmpty
     }
 }
 

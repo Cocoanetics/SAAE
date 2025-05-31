@@ -36,15 +36,3 @@ public enum VisibilityLevel: String, CaseIterable {
 	/// Open access is the highest (least restrictive) access level and enables entities to be used and subclassed/overridden outside of their defining module.
 	case `open`
 }
-
-extension VisibilityLevel: Comparable {
-	/// Compares two visibility levels based on their restrictiveness.
-	///
-	/// - Parameters:
-	///   - lhs: The left-hand side visibility level.
-	///   - rhs: The right-hand side visibility level.
-	/// - Returns: `true` if the left visibility level is more restrictive than the right one.
-	public static func < (lhs: VisibilityLevel, rhs: VisibilityLevel) -> Bool {
-		return allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
-	}
-}

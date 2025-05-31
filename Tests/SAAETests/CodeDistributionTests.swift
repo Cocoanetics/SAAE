@@ -47,11 +47,11 @@ struct Phase4_CodeDistributionTests {
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         // Verify we have the expected number of files
-        #expect(result.originalFile != nil)
+        #expect(result.modifiedOriginalFile != nil)
         #expect(result.newFiles.count == 4)
         
         // Verify original file keeps only the first declaration (MainModel)
-        let originalContent = result.originalFile!.content
+        let originalContent = result.modifiedOriginalFile!.content
         #expect(originalContent.contains("struct MainModel"))
         #expect(!originalContent.contains("class UtilityHelper"))
         #expect(!originalContent.contains("enum Configuration"))
@@ -92,7 +92,7 @@ struct Phase4_CodeDistributionTests {
         
 //        // Print original source and all resulting files
 //        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.originalFile {
+//        if let original = result.modifiedOriginalFile {
 //            print("\n=== File: \(original.fileName) ===\n" + original.content)
 //        }
 //        for file in result.newFiles {
@@ -131,7 +131,7 @@ struct Phase4_CodeDistributionTests {
         
 //        // Print original source and all resulting files
 //        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.originalFile {
+//        if let original = result.modifiedOriginalFile {
 //            print("\n=== File: \(original.fileName) ===\n" + original.content)
 //        }
 //        for file in result.newFiles {
@@ -155,14 +155,14 @@ struct Phase4_CodeDistributionTests {
         let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: "TestFile.swift")
         
         // Should keep the single declaration in original file
-        #expect(result.originalFile != nil)
+        #expect(result.modifiedOriginalFile != nil)
         #expect(result.newFiles.isEmpty)
-        #expect(result.originalFile!.content.contains("struct SingleModel"))
-        #expect(result.originalFile!.content.contains("import Foundation"))
+        #expect(result.modifiedOriginalFile!.content.contains("struct SingleModel"))
+        #expect(result.modifiedOriginalFile!.content.contains("import Foundation"))
         
 //        // Print original source and all resulting files
 //        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.originalFile {
+//        if let original = result.modifiedOriginalFile {
 //            print("\n=== File: \(original.fileName) ===\n" + original.content)
 //        }
 //        for file in result.newFiles {
@@ -209,7 +209,7 @@ struct Phase4_CodeDistributionTests {
         
         // Print original source and all resulting files
 //        print("\n=== Original Source ===\n" + sourceCode)
-//        if let original = result.originalFile {
+//        if let original = result.modifiedOriginalFile {
 //            print("\n=== File: \(original.fileName) ===\n" + original.content)
 //        }
 //        for file in result.newFiles {

@@ -3,14 +3,14 @@ import SwiftSyntax
 
 /// Result of code distribution operation
 public struct DistributionResult {
-    /// The modified original file (keeping only first declaration)
-    public let originalFile: GeneratedFile?
+    /// The modified original file with extracted declarations removed
+    public let modifiedOriginalFile: GeneratedFile?
     
-    /// New files created for the remaining declarations
+    /// New files created for the extracted declarations
     public let newFiles: [GeneratedFile]
     
-    public init(originalFile: GeneratedFile?, newFiles: [GeneratedFile]) {
-        self.originalFile = originalFile
+    public init(modifiedOriginalFile: GeneratedFile?, newFiles: [GeneratedFile]) {
+        self.modifiedOriginalFile = modifiedOriginalFile
         self.newFiles = newFiles
     }
 }
@@ -45,59 +45,63 @@ public class CodeDistributor {
     /// Distributes declarations from a source file, keeping the first declaration in the original file
     /// and moving all others to appropriately named separate files.
     ///
-    /// - Parameter tree: The syntax tree to distribute
-    /// - Returns: Distribution result with original file and new files
+    /// - Parameters:
+    ///   - tree: The syntax tree to distribute
+    ///   - originalFileName: The original filename to use for the modified file
+    /// - Returns: Distribution result with modified original file and new files
     /// - Throws: Distribution errors
-    public func distributeKeepingFirst(tree: SyntaxTree) throws -> DistributionResult {
+    public func distributeKeepingFirst(tree: SyntaxTree, originalFileName: String) throws -> DistributionResult {
         // Extract imports and declarations
         let overview = CodeOverview(tree: tree, minVisibility: .private) // Include all declarations
         let imports = overview.imports
         let declarations = overview.declarations
         
         guard !declarations.isEmpty else {
-            // No declarations found
-            return DistributionResult(originalFile: nil, newFiles: [])
+            // No declarations found - return original file unchanged
+            let originalContent = tree.sourceFile.description
+            let originalFile = GeneratedFile(
+                fileName: originalFileName,
+                content: originalContent,
+                imports: imports,
+                declarations: []
+            )
+            return DistributionResult(modifiedOriginalFile: originalFile, newFiles: [])
         }
         
         if declarations.count == 1 {
-            // Only one declaration, keep it in original file
-            let originalContent = try generateFileContent(imports: imports, targetDeclarations: declarations, sourceFile: tree.sourceFile)
+            // Only one declaration, keep original file unchanged
+            let originalContent = tree.sourceFile.description
             let originalFile = GeneratedFile(
-                fileName: "Original.swift", // Placeholder name
+                fileName: originalFileName,
                 content: originalContent,
                 imports: imports,
                 declarations: declarations
             )
-            return DistributionResult(originalFile: originalFile, newFiles: [])
+            return DistributionResult(modifiedOriginalFile: originalFile, newFiles: [])
         }
         
-        // Multiple declarations: keep first, move others
+        // Multiple declarations: keep first, extract others
         let firstDeclaration = declarations[0]
-        let remainingDeclarations = Array(declarations.dropFirst())
+        let declarationsToExtract = Array(declarations.dropFirst())
         
-        // Generate original file with only first declaration
-        let originalContent = try generateFileContent(
-            imports: imports, 
-            targetDeclarations: [firstDeclaration], 
-            sourceFile: tree.sourceFile
-        )
-        let originalFile = GeneratedFile(
-            fileName: "Original.swift", // Placeholder name
-            content: originalContent,
+        // Create modified source file with extracted declarations removed
+        let modifiedSourceFile = try removeDeclarations(declarationsToExtract, from: tree.sourceFile)
+        
+        // Generate modified original file with only the first declaration (and imports)
+        let modifiedOriginalContent = modifiedSourceFile.description
+        let modifiedOriginalFile = GeneratedFile(
+            fileName: originalFileName,
+            content: modifiedOriginalContent,
             imports: imports,
             declarations: [firstDeclaration]
         )
         
-        // Generate new files for remaining declarations
+        // Generate new files for extracted declarations
         var newFiles: [GeneratedFile] = []
         
-        for declaration in remainingDeclarations {
+        for declaration in declarationsToExtract {
             let fileName = generateFileName(for: declaration, tree: tree)
-            let content = try generateFileContent(
-                imports: imports, 
-                targetDeclarations: [declaration], 
-                sourceFile: tree.sourceFile
-            )
+            let content = try generateFileContentForDeclaration(declaration, imports: imports, sourceFile: tree.sourceFile)
             
             let newFile = GeneratedFile(
                 fileName: fileName,
@@ -108,7 +112,81 @@ public class CodeDistributor {
             newFiles.append(newFile)
         }
         
-        return DistributionResult(originalFile: originalFile, newFiles: newFiles)
+        return DistributionResult(modifiedOriginalFile: modifiedOriginalFile, newFiles: newFiles)
+    }
+    
+    /// Removes specific declarations from a source file
+    private func removeDeclarations(_ declarationsToRemove: [DeclarationOverview], from sourceFile: SourceFileSyntax) throws -> SourceFileSyntax {
+        // Get the indices of declarations to remove (1-based paths converted to 0-based indices)
+        let indicesToRemove = Set(declarationsToRemove.compactMap { declaration -> Int? in
+            let pathComponents = declaration.path.split(separator: ".").compactMap { Int($0) }
+            guard let firstIndex = pathComponents.first, firstIndex > 0 else { return nil }
+            
+            // Convert to 0-based index in declaration statements (not all statements)
+            return firstIndex - 1
+        })
+        
+        // Filter statements to remove target declarations
+        var newStatements: [CodeBlockItemSyntax] = []
+        var declarationIndex = 0
+        
+        for statement in sourceFile.statements {
+            // Check if this is a declaration statement (not import or other)
+            if let declSyntax = statement.item.as(DeclSyntax.self) {
+                // Skip import declarations - they don't count towards declaration indices
+                if declSyntax.is(ImportDeclSyntax.self) {
+                    newStatements.append(statement)
+                    continue
+                }
+                
+                // Check if this declaration should be removed
+                if indicesToRemove.contains(declarationIndex) {
+                    // Skip this declaration (remove it)
+                    declarationIndex += 1
+                    continue
+                } else {
+                    // Keep this declaration
+                    newStatements.append(statement)
+                    declarationIndex += 1
+                }
+            } else {
+                // Non-declaration statement, keep it
+                newStatements.append(statement)
+            }
+        }
+        
+        // Create new source file with modified statements
+        return sourceFile.with(\.statements, CodeBlockItemListSyntax(newStatements))
+    }
+    
+    /// Generates file content for a single declaration
+    private func generateFileContentForDeclaration(_ declaration: DeclarationOverview, imports: [String], sourceFile: SourceFileSyntax) throws -> String {
+        var content = ""
+        
+        // Add imports
+        for importName in imports {
+            content += "import \(importName)\n"
+        }
+        
+        if !imports.isEmpty {
+            content += "\n"
+        }
+        
+        // Add the target declaration
+        if let declSyntax = findDeclarationSyntax(for: declaration, in: sourceFile) {
+            // Fix access control for extracted declarations
+            let declString = fixAccessControl(declSyntax.description)
+            content += declString
+        }
+        
+        return content
+    }
+    
+    /// Fixes access control levels when extracting declarations to separate files
+    private func fixAccessControl(_ declarationCode: String) -> String {
+        // Replace 'private' with 'internal' when moving to separate files
+        // This allows the extracted code to be accessible from other files in the same module
+        return declarationCode.replacingOccurrences(of: "private ", with: "internal ")
     }
     
     /// Generates appropriate filename for a declaration
@@ -191,34 +269,5 @@ public class CodeDistributor {
         guard firstIndex <= declarationStatements.count else { return nil }
         
         return declarationStatements[firstIndex - 1]
-    }
-    
-    /// Generates the complete source file content for given imports and specific target declarations
-    private func generateFileContent(imports: [String], targetDeclarations: [DeclarationOverview], sourceFile: SourceFileSyntax) throws -> String {
-        var content = ""
-        
-        // Add imports
-        for importName in imports {
-            content += "import \(importName)\n"
-        }
-        
-        if !imports.isEmpty {
-            content += "\n"
-        }
-        
-        // Add only the target declarations
-        for (index, targetDeclaration) in targetDeclarations.enumerated() {
-            if let declSyntax = findDeclarationSyntax(for: targetDeclaration, in: sourceFile) {
-                // Add the original syntax with proper formatting
-                let declString = declSyntax.description
-                content += declString
-                
-                if index < targetDeclarations.count - 1 {
-                    content += "\n\n"
-                }
-            }
-        }
-        
-        return content
     }
 } 

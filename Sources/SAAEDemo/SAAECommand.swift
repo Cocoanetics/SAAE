@@ -389,10 +389,10 @@ struct DistributeCommand: AsyncParsableCommand {
                     let source = try String(contentsOf: url)
                     let tree = try SyntaxTree(string: source)
                     let distributor = CodeDistributor()
-                    let result = try distributor.distributeKeepingFirst(tree: tree)
+                    let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
                     let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
-                    let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent
-                    if let original = result.originalFile {
+                    let origPath = targetDir.appendingPathComponent(result.modifiedOriginalFile?.fileName ?? "(none)").lastPathComponent
+                    if let original = result.modifiedOriginalFile {
                         let oldLineCount = source.split(separator: "\n").count
                         let newLineCount = original.content.split(separator: "\n").count
                         let deltaStr = "→\(newLineCount)"
@@ -422,11 +422,11 @@ struct DistributeCommand: AsyncParsableCommand {
             let source = try String(contentsOf: url)
             let tree = try SyntaxTree(string: source)
             let distributor = CodeDistributor()
-            let result = try distributor.distributeKeepingFirst(tree: tree)
+            let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
             let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
             if dryRun {
-                let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent
-                if let original = result.originalFile {
+                let origPath = targetDir.appendingPathComponent(result.modifiedOriginalFile?.fileName ?? "(none)").lastPathComponent
+                if let original = result.modifiedOriginalFile {
                     let oldLineCount = source.split(separator: "\n").count
                     let newLineCount = original.content.split(separator: "\n").count
                     let deltaStr = "→\(newLineCount)"
@@ -448,7 +448,7 @@ struct DistributeCommand: AsyncParsableCommand {
                 }
             } else {
                 // Write original file (overwrite)
-                if let original = result.originalFile {
+                if let original = result.modifiedOriginalFile {
                     let outPath = targetDir.appendingPathComponent(original.fileName)
                     let contentWithNewline = ensureEndsWithNewline(original.content)
                     try contentWithNewline.write(to: outPath, atomically: true, encoding: .utf8)

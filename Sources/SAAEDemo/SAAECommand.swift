@@ -362,6 +362,9 @@ struct DistributeCommand: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Output directory (default: print to stdout)")
     var output: String?
 
+    @Flag(name: .long, help: "Show what would be written, but do not write any files")
+    var dryRun: Bool = false
+
     func run() async throws {
         let swiftFiles = try collectSwiftFiles(from: paths, recursive: recursive)
         guard !swiftFiles.isEmpty else {
@@ -373,35 +376,108 @@ struct DistributeCommand: AsyncParsableCommand {
         if let dir = outputDir {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         }
-        for filePath in swiftFiles {
+        if dryRun {
+            // Group files by folder
+            let filesByFolder = Dictionary(grouping: swiftFiles) { filePath in
+                URL(fileURLWithPath: filePath).deletingLastPathComponent().path
+            }
+            for (folder, files) in filesByFolder.sorted(by: { $0.key < $1.key }) {
+                print("\n📂 \(folder)")
+                // Collect all output lines for this folder
+                var outputLines: [(isEdit: Bool, name: String, info: String)] = []
+                for filePath in files.sorted() {
+                    let url = URL(fileURLWithPath: filePath)
+                    let source = try String(contentsOf: url)
+                    let tree = try SyntaxTree(string: source)
+                    let distributor = CodeDistributor()
+                    let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
+                    let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
+                    let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent
+                    if let original = result.originalFile {
+                        let oldLineCount = source.split(separator: "\n").count
+                        let newLineCount = original.content.split(separator: "\n").count
+                        let deltaStr = "→\(newLineCount)"
+                        outputLines.append((true, origPath, "[\(oldLineCount)\(deltaStr)]"))
+                    }
+                    for file in result.newFiles {
+                        let filePath = targetDir.appendingPathComponent(file.fileName).lastPathComponent
+                        let lineCount = file.content.split(separator: "\n").count
+                        outputLines.append((false, filePath, "[\(lineCount)]"))
+                    }
+                }
+                // Print all lines with correct tree branches
+                for i in 0..<outputLines.count {
+                    let (isEdit, name, info) = outputLines[i]
+                    let isLast = i == outputLines.count - 1
+                    let branch = isLast ? "└─" : "├─"
+                    let icon = isEdit ? "✏️" : "🆕"
+                    print("  \(branch) \(icon)  \(name) \(info)")
+                }
+            }
+            print("\n✅ Distribution complete.")
+            return
+        }
+        for (fileIdx, filePath) in swiftFiles.enumerated() {
             let url = URL(fileURLWithPath: filePath)
             print("\n=== Processing: \(filePath) ===")
             let source = try String(contentsOf: url)
             let tree = try SyntaxTree(string: source)
             let distributor = CodeDistributor()
-            let result = try distributor.distributeKeepingFirst(tree: tree)
-            // Write or print original file
-            if let original = result.originalFile {
-                if let dir = outputDir {
-                    let outPath = dir.appendingPathComponent(original.fileName)
+            let result = try distributor.distributeKeepingFirst(tree: tree, originalFileName: url.lastPathComponent)
+            let targetDir: URL = outputDir ?? url.deletingLastPathComponent()
+            if dryRun {
+                let origPath = targetDir.appendingPathComponent(result.originalFile?.fileName ?? "(none)").lastPathComponent
+                if let original = result.originalFile {
+                    let oldLineCount = source.split(separator: "\n").count
+                    let newLineCount = original.content.split(separator: "\n").count
+                    let deltaStr = "→\(newLineCount)"
+                    let hasChildren = !result.newFiles.isEmpty
+                    let isLastFile = fileIdx == swiftFiles.count - 1
+                    let branch = hasChildren ? (isLastFile ? "└─" : "├─") : (isLastFile ? "└─" : "├─")
+                    print("  \(branch) ✏️  \(origPath) [\(oldLineCount)\(deltaStr)]")
+                    if hasChildren {
+                        let newFiles = result.newFiles
+                        for (i, file) in newFiles.enumerated() {
+                            let filePath = targetDir.appendingPathComponent(file.fileName).lastPathComponent
+                            let lineCount = file.content.split(separator: "\n").count
+                            let isLast = (i == newFiles.count - 1)
+                            let childBranch = isLastFile ? "    " : "│   "
+                            let childBranchSymbol = isLast ? "└─" : "├─"
+                            print("  \(childBranch)\(childBranchSymbol) 🆕  \(filePath) [\(lineCount)]")
+                        }
+                    }
+                }
+            } else {
+                // Write original file (overwrite)
+                if let original = result.originalFile {
+                    let outPath = targetDir.appendingPathComponent(original.fileName)
                     try original.content.write(to: outPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(original.fileName)")
-                } else {
-                    print("\n=== File: \(original.fileName) ===\n" + original.content)
                 }
-            }
-            // Write or print new files
-            for file in result.newFiles {
-                if let dir = outputDir {
-                    let outPath = dir.appendingPathComponent(file.fileName)
+                // Write new files
+                for file in result.newFiles {
+                    let outPath = targetDir.appendingPathComponent(file.fileName)
                     try file.content.write(to: outPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(file.fileName)")
-                } else {
-                    print("\n=== File: \(file.fileName) ===\n" + file.content)
                 }
             }
         }
         print("\n✅ Distribution complete.")
+    }
+
+    /// Extracts a summary of top-level declarations from file content for dry-run output
+    private func describeDeclarations(in content: String) -> String {
+        // Simple regex to match top-level declarations (struct, class, enum, extension, protocol, typealias, actor)
+        let pattern = "^(public |internal |private |fileprivate |open )?(struct|class|enum|extension|protocol|typealias|actor)\\s+([A-Za-z0-9_+]+)" // + for extensions
+        let lines = content.split(separator: "\n")
+        var decls: [String] = []
+        for line in lines {
+            if let match = line.range(of: pattern, options: [.regularExpression, .anchored]) {
+                let decl = String(line[match])
+                decls.append(decl.trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return decls.joined(separator: ", ")
     }
 
     private func collectSwiftFiles(from paths: [String], recursive: Bool) throws -> [String] {

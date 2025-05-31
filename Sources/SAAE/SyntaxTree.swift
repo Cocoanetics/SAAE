@@ -677,7 +677,7 @@ extension SyntaxTree {
     /// Finds nodes at a specific line number with selection strategy
     public func findNodesAtLine(_ lineNumber: Int, selection: LineNodeSelection = .first) -> LineNodeInfo {
         let finder = LineNodeFinder(targetLine: lineNumber, locationConverter: locationConverter)
-        _ = finder.visit(sourceFile)
+        finder.walk(sourceFile)
         
         let selectedNode: (node: Syntax, column: Int, length: Int, path: String)?
         
@@ -794,8 +794,35 @@ fileprivate class LeadingTriviaRewriter: SyntaxRewriter {
         if pathString == targetPath {
             foundTarget = true
             var mutableToken = token // Make a mutable copy to modify trivia
-            let newTriviaPieces: [TriviaPiece] = newLeadingTriviaText.map { [.docLineComment($0), .newlines(1)] } ?? []
-            mutableToken.leadingTrivia = Trivia(pieces: newTriviaPieces) // Direct assignment
+            let newPieces: [TriviaPiece]
+            if let text = newLeadingTriviaText {
+                let pieces = token.leadingTrivia.pieces
+                var indent: [TriviaPiece] = []
+                var rest: [TriviaPiece] = []
+                var foundNonIndent = false
+                for piece in pieces {
+                    switch piece {
+                    case .spaces, .tabs:
+                        if !foundNonIndent {
+                            indent.append(piece)
+                        } else {
+                            rest.append(piece)
+                        }
+                    default:
+                        foundNonIndent = true
+                        rest.append(piece)
+                    }
+                }
+                var combined: [TriviaPiece] = []
+                combined.append(contentsOf: indent)
+                combined.append(.docLineComment(text))
+                combined.append(.newlines(1))
+                combined.append(contentsOf: rest)
+                newPieces = combined
+            } else {
+                newPieces = token.leadingTrivia.pieces
+            }
+            mutableToken.leadingTrivia = Trivia(pieces: newPieces)
             resultToken = mutableToken
         }
         _ = currentTokenPath.popLast()
@@ -904,11 +931,13 @@ fileprivate class LineNodeFinder: SyntaxVisitor {
         currentTokenIndex += 1
         currentTokenPath.append(currentTokenIndex)
         
-        // Get the location of this token
-        let location = locationConverter.location(for: token.position)
+        // Get the location of this token's content, after its leading trivia
+        let contentPosition = token.positionAfterSkippingLeadingTrivia // Back to positionAfterSkippingLeadingTrivia
+        let location = locationConverter.location(for: contentPosition)
         
         // If this token starts on our target line, record it
         if location.line == targetLine {
+            // Temporarily always add if in range, to see what lines ARE found
             let length = token.description.count
             let pathString = currentTokenPath.map(String.init).joined(separator: ".")
             

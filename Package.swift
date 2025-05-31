@@ -48,5 +48,8 @@ let package = Package(
 			resources: [
 				.copy("Resources")
 			]),
+		.executableTarget(
+			name: "DebugExec",
+			dependencies: ["SAAE"])
 	]
 )

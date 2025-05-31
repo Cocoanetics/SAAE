@@ -333,6 +333,7 @@ public class CodeDistributor {
         guard let declSyntax = findDeclarationSyntax(for: declaration, in: sourceFile) else {
             return ""
         }
+        // Always apply AccessControlRewriter to the whole declaration (including top-level types)
         let rewriter = AccessControlRewriter()
         let rewrittenDecl = rewriter.visit(declSyntax)
         return rewrittenDecl.description.trimmingCharacters(in: .newlines)

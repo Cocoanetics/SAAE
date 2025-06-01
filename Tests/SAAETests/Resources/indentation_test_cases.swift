@@ -91,11 +91,11 @@ public func processNumbers(_ numbers: [Int]) -> [Int] {
     for number in numbers {
         if number > 0 {
             result.append(number * 2)
-        } else             if number < 0 {
-                result.append(abs(number))
-            } else {
-                result.append(1)
-            }
+        } else if number < 0 {
+            result.append(abs(number))
+        } else {
+            result.append(1)
+        }
     }
 
     return result
@@ -104,7 +104,7 @@ public func processNumbers(_ numbers: [Int]) -> [Int] {
 public func demonstrateControlFlow() {
     let numbers = [1, -2, 0, 4, -5]
 
-// For loop with nested conditions
+    // For loop with nested conditions
     for i in 0..<numbers.count {
         let num = numbers[i]
         switch num {
@@ -119,18 +119,18 @@ public func demonstrateControlFlow() {
         }
     }
 
-// While loop
+    // While loop
     var counter = 0
     while counter < 3 {
         print("Counter: \(counter)")
         counter += 1
     }
 
-// Do-while equivalent
-repeat {
-counter -= 1
-print("Countdown: \(counter)")
-} while counter > 0
+    // Do-while equivalent
+    repeat {
+        counter -= 1
+        print("Countdown: \(counter)")
+    } while counter > 0
 }
 
 // MARK: - Nested Structures
@@ -159,8 +159,8 @@ public struct Organization {
 
         func getTotalSalary() -> Double {
             return employees.reduce(0) { total, employee in
-            return total + employee.salary
-        }
+                return total + employee.salary
+            }
         }
 
         mutating func addEmployee(_ employee: Employee) {
@@ -170,8 +170,8 @@ public struct Organization {
 
     func getTotalEmployees() -> Int {
         return departments.reduce(0) { total, dept in
-        return total + dept.employees.count
-    }
+            return total + dept.employees.count
+        }
     }
 }
 
@@ -193,18 +193,18 @@ public struct Stack<Element> {
     }
 
     var isEmpty: Bool {
-    return items.isEmpty
-}
+        return items.isEmpty
+    }
 
     var count: Int {
-    return items.count
-}
+        return items.count
+    }
 }
 
 public func findMaximum<T: Comparable>(_ array: [T]) -> T? {
     guard !array.isEmpty else {
-    return nil
-}
+        return nil
+    }
 
     var maximum = array[0]
     for element in array[1...] {
@@ -220,23 +220,23 @@ public func findMaximum<T: Comparable>(_ array: [T]) -> T? {
 public func demonstrateClosures() {
     let numbers = [1, 2, 3, 4, 5]
 
-// Map with trailing closure
+    // Map with trailing closure
     let doubled = numbers.map { number in
-    return number * 2
-}
+        return number * 2
+    }
 
-// Filter with shorthand
-    let evens = numbers.filter {     $0 % 2 == 0 }
+    // Filter with shorthand
+    let evens = numbers.filter { $0 % 2 == 0 }
 
-// Reduce with explicit closure
+    // Reduce with explicit closure
     let sum = numbers.reduce(0) { (result, number) in
-    return result + number
-}
+        return result + number
+    }
 
-// Sort with comparison
+    // Sort with comparison
     let sorted = numbers.sorted { (first, second) in
-    return first > second
-}
+        return first > second
+    }
 
     print("Doubled: \(doubled)")
     print("Evens: \(evens)")
@@ -290,21 +290,21 @@ public enum ValidationError: Error {
 
 public func validateName(_ name: String) throws -> String {
     guard !name.isEmpty else {
-    throw ValidationError.emptyString
-}
+        throw ValidationError.emptyString
+    }
 
     guard name.count >= 2 else {
-    throw ValidationError.tooShort(minimum: 2)
-}
+        throw ValidationError.tooShort(minimum: 2)
+    }
 
     guard name.count <= 50 else {
-    throw ValidationError.tooLong(maximum: 50)
-}
+        throw ValidationError.tooLong(maximum: 50)
+    }
 
     let allowedCharacters = CharacterSet.letters.union(.whitespaces)
-    guard name.unicodeScalars.allSatisfy({     allowedCharacters.contains($0) }) else {
-    throw ValidationError.invalidCharacters
-}
+    guard name.unicodeScalars.allSatisfy({ allowedCharacters.contains($0) }) else {
+        throw ValidationError.invalidCharacters
+    }
 
     return name.trimmingCharacters(in: .whitespaces)
 }
@@ -312,19 +312,19 @@ public func validateName(_ name: String) throws -> String {
 public func processNames(_ names: [String]) {
     for name in names {
         do {
-        let validName = try validateName(name)
-        print("Valid name: \(validName)")
-    } catch ValidationError.emptyString {
-        print("Error: Name cannot be empty")
-    } catch ValidationError.tooShort(let minimum) {
-        print("Error: Name must be at least \(minimum) characters")
-    } catch ValidationError.tooLong(let maximum) {
-        print("Error: Name must be no more than \(maximum) characters")
-    } catch ValidationError.invalidCharacters {
-        print("Error: Name contains invalid characters")
-    } catch {
-        print("Unexpected error: \(error)")
-    }
+            let validName = try validateName(name)
+            print("Valid name: \(validName)")
+        } catch ValidationError.emptyString {
+            print("Error: Name cannot be empty")
+        } catch ValidationError.tooShort(let minimum) {
+            print("Error: Name must be at least \(minimum) characters")
+        } catch ValidationError.tooLong(let maximum) {
+            print("Error: Name must be no more than \(maximum) characters")
+        } catch ValidationError.invalidCharacters {
+            print("Error: Name contains invalid characters")
+        } catch {
+            print("Unexpected error: \(error)")
+        }
     }
 }
 
@@ -335,15 +335,15 @@ public actor BankAccount {
     private var balance: Double = 0.0
 
     func deposit(_ amount: Double) {
-        guard amount > 0 else { return     }
+        guard amount > 0 else { return }
         balance += amount
         print("Deposited $\(amount). New balance: $\(balance)")
     }
 
     func withdraw(_ amount: Double) -> Bool {
         guard amount > 0 && amount <= balance else {
-        return false
-    }
+            return false
+        }
         balance -= amount
         print("Withdrew $\(amount). New balance: $\(balance)")
         return true
@@ -390,21 +390,21 @@ public struct Clamped<T: Comparable> {
     }
 
     public var wrappedValue: T {
-get {     value }
-set {     value = Swift.min(Swift.max(newValue, min), max) }
-}
+        get { value }
+        set { value = Swift.min(Swift.max(newValue, min), max) }
+    }
 }
 
 public struct Settings {
     @Clamped(min: 0, max: 100)
-var volume: Int = 50
+    var volume: Int = 50
 
     @Clamped(min: 0.0, max: 1.0)
-var brightness: Double = 0.8
+    var brightness: Double = 0.8
 
     var isValid: Bool {
-    return volume >= 0 && brightness >= 0.0
-}
+        return volume >= 0 && brightness >= 0.0
+    }
 
     func summary() -> String {
         return "Volume: \(volume)%, Brightness: \(Int(brightness * 100))%"

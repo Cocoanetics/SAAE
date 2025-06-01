@@ -127,10 +127,10 @@ public func demonstrateControlFlow() {
     }
 
 // Do-while equivalent
-    repeat {
-        counter -= 1
-        print("Countdown: \(counter)")
-    } while counter > 0
+repeat {
+counter -= 1
+print("Countdown: \(counter)")
+} while counter > 0
 }
 
 // MARK: - Nested Structures

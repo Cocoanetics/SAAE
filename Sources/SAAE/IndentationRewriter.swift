@@ -174,6 +174,14 @@ public class IndentationRewriter: SyntaxRewriter {
         return result
     }
     
+    public override func visit(_ node: RepeatStmtSyntax) -> StmtSyntax {
+        let indentedNode = applyIndentation(node, level: currentLevel)
+        currentLevel += 1
+        let result = super.visit(indentedNode)
+        currentLevel -= 1
+        return result
+    }
+    
     // MARK: - Switch Statements
     
     public override func visit(_ node: SwitchExprSyntax) -> ExprSyntax {

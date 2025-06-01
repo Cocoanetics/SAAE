@@ -199,6 +199,11 @@ struct IndentationTests {
         }
         }
         
+        // Do-while equivalent
+        repeat {
+        result.append(0)
+        } while result.count < 10
+        
         return result
         }
         """
@@ -220,6 +225,12 @@ struct IndentationTests {
         #expect(result.contains("            result.append(abs(number))"))
         #expect(result.contains("        } else {"))
         #expect(result.contains("            result.append(1)"))
+        
+        // Check repeat statement indentation
+        #expect(result.contains("    repeat {"))
+        #expect(result.contains("        result.append(0)"))
+        #expect(result.contains("    } while result.count < 10"))
+        
         #expect(result.contains("    return result"))
     }
 } 

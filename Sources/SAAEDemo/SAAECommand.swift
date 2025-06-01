@@ -655,7 +655,7 @@ struct ReindentCommand: AsyncParsableCommand {
                     print("✅ \(filePath): Reindented")
                 }
             } else {
-                print("⏭️ \(filePath): Already properly indented")
+                print("⏭️  \(filePath): Already properly indented")
             }
 
         } catch {

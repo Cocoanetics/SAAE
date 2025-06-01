@@ -70,9 +70,6 @@ struct IndentationTests {
         let reindented = try tree.reindent(indentSize: 4)
         let result = reindented.serializeToCode()
         
-        print("Switch statement result:")
-        print(result)
-        
         // Check switch case indentation
         #expect(result.contains("    switch value"))
         #expect(result.contains("        case \"a\":"))
@@ -101,9 +98,6 @@ struct IndentationTests {
         let tree = try SyntaxTree(string: badlyIndentedCode)
         let reindented = try tree.reindent(indentSize: 4)
         let result = reindented.serializeToCode()
-        
-        print("Nested structures result:")
-        print(result)
         
         // Check nested indentation
         #expect(result.contains("    public struct Inner"))
@@ -138,9 +132,6 @@ struct IndentationTests {
         let reindented = try tree.reindent(indentSize: 4)
         let result = reindented.serializeToCode()
         
-        print("Enum with cases result:")
-        print(result)
-        
         // Check enum case indentation
         #expect(result.contains("    case pending"))
         #expect(result.contains("    case active(String)"))
@@ -172,9 +163,6 @@ struct IndentationTests {
         let tree = try SyntaxTree(string: badlyIndentedCode)
         let reindented = try tree.reindent(indentSize: 4)
         let result = reindented.serializeToCode()
-        
-        print("Multiline string literals result:")
-        print(result)
         
         // Check that the class and function are properly indented
         #expect(result.contains("    public func test"))

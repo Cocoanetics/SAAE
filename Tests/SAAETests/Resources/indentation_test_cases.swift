@@ -74,13 +74,13 @@ func area() -> Double
 }
 
 extension Point: Drawable {
-func draw() {
-print("Drawing point at (\(x), \(y))")
-}
+    public func draw() {
+        print("Drawing point at (\(x), \(y))")
+    }
 
-func area() -> Double {
-return 0.0
-}
+    public func area() -> Double {
+        return 0.0
+    }
 }
 
 // MARK: - Functions with Various Control Flow

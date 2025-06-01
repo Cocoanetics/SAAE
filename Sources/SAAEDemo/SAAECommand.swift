@@ -47,35 +47,35 @@ struct AnalyzeCommand: AsyncParsableCommand {
     SAAEDemo analyze file1.swift file2.swift -f yaml
 """
     )
-    
+
     @Argument(help: "Swift file(s) or directory to analyze")
     var paths: [String]
-    
+
     @Option(name: .shortAndLong, help: "Output format")
     var format: OutputFormat = .interface
-    
+
     @Flag(name: .shortAndLong, help: "Recursively search directories for Swift files")
     var recursive: Bool = false
-    
+
     @Option(name: .shortAndLong, help: "Minimum visibility level to include")
     var visibility: VisibilityLevel = .internal
-    
+
     @Option(name: .shortAndLong, help: "Output file path (optional, prints to stdout if not specified)")
     var output: String?
-    
+
     func run() async throws {
         print("🚀 SAAE (Swift AST Abstractor & Editor) Demo")
         print("=============================================\n")
-        
+
         let analyzer = SAAEAnalyzer(
             paths: paths,
             format: format,
             visibility: visibility,
             recursive: recursive
         )
-        
+
         let result = try await analyzer.analyze()
-        
+
         if let outputPath = output {
             try result.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
             print("✅ Output written to: \(outputPath)")
@@ -90,13 +90,13 @@ struct AnalyzeCommand: AsyncParsableCommand {
 enum ErrorOutputFormat: String, CaseIterable, ExpressibleByArgument {
     case json
     case markdown
-    
+
     var defaultValueDescription: String {
-        switch self {
+    switch self {
         case .json: return "JSON format"
         case .markdown: return "Markdown format"
-        }
     }
+}
 }
 
 struct ErrorsCommand: AsyncParsableCommand {
@@ -118,148 +118,148 @@ struct ErrorsCommand: AsyncParsableCommand {
     SAAEDemo errors file.swift --show-fixits       # Show fix-it suggestions (like swiftc -fixit)
 """
     )
-    
+
     @Argument(help: "Swift file(s) or directory to check for syntax errors")
     var paths: [String]
-    
+
     @Flag(name: .shortAndLong, help: "Recursively search directories for Swift files")
     var recursive: Bool = false
-    
+
     @Option(name: .shortAndLong, help: "Output file path (optional, prints to stdout if not specified)")
     var output: String?
-    
+
     @Option(name: .shortAndLong, help: "Output format")
     var format: ErrorOutputFormat = .json
-    
+
     @Flag(help: "Pretty-print JSON output (ignored for markdown)")
     var pretty: Bool = false
-    
+
     @Flag(help: "Show fix-it suggestions (like swiftc -fixit)")
     var showFixits: Bool = false
-    
+
     func run() async throws {
         print("🔍 SAAE Syntax Error Detection")
         print("==============================\n")
-        
+
         let swiftFiles = try collectSwiftFiles(from: paths, recursive: recursive)
-        
+
         if swiftFiles.isEmpty {
             print("❌ No Swift files found in the specified paths.")
             throw ExitCode.failure
         }
-        
+
         print("📁 Found \(swiftFiles.count) Swift file(s) to analyze...")
-        
+
         var allErrors: [FileErrorReport] = []
         var totalErrorCount = 0
-        
+
         for filePath in swiftFiles {
             let url = URL(fileURLWithPath: filePath)
-            
+
             do {
-                let tree = try SyntaxTree(url: url)
-                let errors = tree.syntaxErrors
-                
-                if !errors.isEmpty {
-                    let report = FileErrorReport(
+            let tree = try SyntaxTree(url: url)
+            let errors = tree.syntaxErrors
+
+            if !errors.isEmpty {
+                let report = FileErrorReport(
                         filePath: filePath,
                         fileName: url.lastPathComponent,
                         errorCount: errors.count,
                         errors: errors.map { ErrorDetail(from: $0) }
                     )
-                    allErrors.append(report)
-                    totalErrorCount += errors.count
-                    print("❌ \(filePath): \(errors.count) error(s)")
-                } else {
-                    print("✅ \(filePath): No errors")
-                }
-                
-            } catch {
-                print("⚠️  \(filePath): Failed to analyze - \(error)")
-                let report = FileErrorReport(
+                allErrors.append(report)
+                totalErrorCount += errors.count
+                print("❌ \(filePath): \(errors.count) error(s)")
+            } else {
+                print("✅ \(filePath): No errors")
+            }
+
+        } catch {
+            print("⚠️  \(filePath): Failed to analyze - \(error)")
+            let report = FileErrorReport(
                     filePath: filePath,
                     fileName: url.lastPathComponent,
                     errorCount: 0,
                     errors: [],
                     analysisError: error.localizedDescription
                 )
-                allErrors.append(report)
-            }
+            allErrors.append(report)
         }
-        
+        }
+
         let summary = ErrorSummary(
             totalFilesAnalyzed: swiftFiles.count,
             filesWithErrors: allErrors.filter { $0.errorCount > 0 }.count,
             totalErrors: totalErrorCount,
             files: allErrors
         )
-        
-        // Generate output based on format
+
+// Generate output based on format
         let outputContent: String
         switch format {
-        case .json:
-            outputContent = try generateJSONOutput(summary: summary)
-        case .markdown:
-            outputContent = generateMarkdownReport(summary)
+            case .json:
+                outputContent = try generateJSONOutput(summary: summary)
+            case .markdown:
+                outputContent = generateMarkdownReport(summary)
         }
-        
+
         if let outputPath = output {
             try outputContent.write(to: URL(fileURLWithPath: outputPath), atomically: true, encoding: .utf8)
             print("\n✅ Error report written to: \(outputPath)")
         } else {
             switch format {
-            case .json:
-                print("\n📋 Error Report JSON:")
-            case .markdown:
-                print("\n📋 Error Report Markdown:")
+                case .json:
+                    print("\n📋 Error Report JSON:")
+                case .markdown:
+                    print("\n📋 Error Report Markdown:")
             }
             print(outputContent)
         }
-        
-        // Exit with error code if syntax errors were found
+
+// Exit with error code if syntax errors were found
         if totalErrorCount > 0 && format == .json {
             print("\n❌ Found \(totalErrorCount) syntax error(s) across \(allErrors.filter { $0.errorCount > 0 }.count) file(s)")
             throw ExitCode.failure
         } else if totalErrorCount == 0 && format == .json {
-            print("\n✅ No syntax errors found!")
-        }
+                print("\n✅ No syntax errors found!")
+            }
     }
-    
+
     private func generateJSONOutput(summary: ErrorSummary) throws -> String {
         let encoder = JSONEncoder()
         if pretty {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         }
-        
+
         let jsonData = try encoder.encode(summary)
         return String(data: jsonData, encoding: .utf8) ?? ""
     }
-    
+
     private func generateMarkdownReport(_ summary: ErrorSummary) -> String {
         var markdown = ""
-        
+
         let filesWithErrors = summary.files.filter { $0.errorCount > 0 }
-        
+
         if filesWithErrors.isEmpty {
             markdown += "✅ **No syntax errors found!**\n\n"
             markdown += "All analyzed files are syntactically correct.\n"
             return markdown
         }
-        
+
         for fileReport in filesWithErrors {
             for error in fileReport.errors {
-                // Smart error line detection
+// Smart error line detection
                 let contextLines = error.sourceContext
                 let rangeParts = error.contextRange.components(separatedBy: "-")
                 let contextStartLine = Int(rangeParts.first ?? "1") ?? 1
                 let maxLineNumber = contextStartLine + contextLines.count - 1
                 let lineNumberWidth = String(maxLineNumber).count
-                
-                // Use the SwiftSyntax-reported line directly (our tests prove it's accurate)
+
+// Use the SwiftSyntax-reported line directly (our tests prove it's accurate)
                 let reportedLineIndex = error.location.line - contextStartLine
                 let actualErrorLine = error.location.line
-                
-                // Header: file:line:col: error: message
+
+// Header: file:line:col: error: message
                 markdown += "\(fileReport.filePath):\(actualErrorLine):\(error.location.column): error: \(error.message)\n"
                 for (index, line) in contextLines.enumerated() {
                     let lineNumber = contextStartLine + index
@@ -267,7 +267,7 @@ struct ErrorsCommand: AsyncParsableCommand {
                     let prefix = String(format: "%*d ┃ ", lineNumberWidth, lineNumber)
                     markdown += prefix + line + "\n"
                     if isErrorLine {
-                        // Collect all pointer lines (error, notes, fix-its)
+// Collect all pointer lines (error, notes, fix-its)
                         var pointerLines: [(String, String)] = [("error", error.message)]
                         for note in error.notes {
                             var noteMsg = note.message
@@ -296,16 +296,16 @@ struct ErrorsCommand: AsyncParsableCommand {
                 markdown += "\n" // Add spacing between errors like swiftc
             }
         }
-        
+
         return markdown
     }
-    
+
     private func collectSwiftFiles(from paths: [String], recursive: Bool) throws -> [String] {
         var swiftFiles: [String] = []
-        
+
         for path in paths {
             var isDirectory: ObjCBool = false
-            
+
             if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) {
                 if isDirectory.boolValue {
                     if recursive {
@@ -324,13 +324,13 @@ struct ErrorsCommand: AsyncParsableCommand {
                         }
                     }
                 } else if path.hasSuffix(".swift") {
-                    swiftFiles.append(path)
-                }
+                        swiftFiles.append(path)
+                    }
             } else {
                 print("⚠️  Path not found: \(path)")
             }
         }
-        
+
         return swiftFiles.sorted()
     }
 }
@@ -368,9 +368,9 @@ struct DistributeCommand: AsyncParsableCommand {
     func run() async throws {
         let swiftFiles = try collectSwiftFiles(from: paths, recursive: recursive)
         guard !swiftFiles.isEmpty else {
-            print("❌ No Swift files found in the specified paths.")
-            throw ExitCode.failure
-        }
+        print("❌ No Swift files found in the specified paths.")
+        throw ExitCode.failure
+    }
         print("📁 Found \(swiftFiles.count) Swift file(s) to distribute...")
         let outputDir: URL? = output.map { URL(fileURLWithPath: $0) }
         if let dir = outputDir {
@@ -379,8 +379,8 @@ struct DistributeCommand: AsyncParsableCommand {
         if dryRun {
             var outputBuffer = ""
             let filesByFolder = Dictionary(grouping: swiftFiles) { filePath in
-                URL(fileURLWithPath: filePath).deletingLastPathComponent().path
-            }
+            URL(fileURLWithPath: filePath).deletingLastPathComponent().path
+        }
             for (folder, files) in filesByFolder.sorted(by: { $0.key < $1.key }) {
                 outputBuffer += "\n📂 \(folder)\n"
                 var outputLines: [(isEdit: Bool, name: String, info: String)] = []
@@ -447,20 +447,20 @@ struct DistributeCommand: AsyncParsableCommand {
                     }
                 }
             } else {
-                // Write original file (overwrite)
+// Write original file (overwrite)
                 if let original = result.modifiedOriginalFile {
                     let originalPath = url // existing file path
                     let newPath = targetDir.appendingPathComponent(original.fileName)
                     let contentWithNewline = ensureEndsWithNewline(original.content)
                     try contentWithNewline.write(to: newPath, atomically: true, encoding: .utf8)
                     print("  → Wrote \(original.fileName)")
-                    // If the filename changed, delete the old file to complete the rename
+// If the filename changed, delete the old file to complete the rename
                     if originalPath.lastPathComponent != original.fileName {
                         try? FileManager.default.removeItem(at: originalPath)
                         print("  ⨂ Deleted old file \(originalPath.lastPathComponent)")
                     }
                 }
-                // Write new files
+// Write new files
                 for file in result.newFiles {
                     let outPath = targetDir.appendingPathComponent(file.fileName)
                     let contentWithNewline = ensureEndsWithNewline(file.content)
@@ -472,9 +472,9 @@ struct DistributeCommand: AsyncParsableCommand {
         print("\n✅ Distribution complete.")
     }
 
-    /// Extracts a summary of top-level declarations from file content for dry-run output
+/// Extracts a summary of top-level declarations from file content for dry-run output
     private func describeDeclarations(in content: String) -> String {
-        // Simple regex to match top-level declarations (struct, class, enum, extension, protocol, typealias, actor)
+// Simple regex to match top-level declarations (struct, class, enum, extension, protocol, typealias, actor)
         let pattern = "^(public |internal |private |fileprivate |open )?(struct|class|enum|extension|protocol|typealias|actor)\\s+([A-Za-z0-9_+]+)" // + for extensions
         let lines = content.split(separator: "\n")
         var decls: [String] = []
@@ -509,8 +509,8 @@ struct DistributeCommand: AsyncParsableCommand {
                         }
                     }
                 } else if path.hasSuffix(".swift") {
-                    swiftFiles.append(path)
-                }
+                        swiftFiles.append(path)
+                    }
             } else {
                 print("⚠️  Path not found: \(path)")
             }
@@ -536,29 +536,29 @@ struct DistributeCommand: AsyncParsableCommand {
         return result.joined(separator: "\n")
     }
 
-    /// Ensures content ends with a newline character
+/// Ensures content ends with a newline character
     private func ensureEndsWithNewline(_ content: String) -> String {
         return content.hasSuffix("\n") ? content : content + "\n"
     }
 
-    // MARK: - Conflict Detection
-    /// Returns true if any file in the distribution result would overwrite an
-    /// existing file that is *not* the original file we are processing.
+// MARK: - Conflict Detection
+/// Returns true if any file in the distribution result would overwrite an
+/// existing file that is *not* the original file we are processing.
     private func hasFileConflicts(result: DistributionResult, originalURL: URL, targetDir: URL) -> Bool {
         var conflicts: [String] = []
         let fm = FileManager.default
-        // Helper to check path
+// Helper to check path
         func pathExists(_ fileName: String) -> Bool {
             fm.fileExists(atPath: targetDir.appendingPathComponent(fileName).path)
         }
-        // Check modified original file (renamed)
+// Check modified original file (renamed)
         if let original = result.modifiedOriginalFile {
             let newName = original.fileName
             if newName != originalURL.lastPathComponent && pathExists(newName) {
                 conflicts.append(newName)
             }
         }
-        // Check new files
+// Check new files
         for file in result.newFiles {
             if pathExists(file.fileName) {
                 conflicts.append(file.fileName)
@@ -590,79 +590,79 @@ struct ReindentCommand: AsyncParsableCommand {
     SAAEDemo reindent Sources/ -r -s 2                     # Short form: recursive with 2-space indentation
 """
     )
-    
+
     @Argument(help: "Swift file(s) or directory to reindent")
     var paths: [String]
-    
+
     @Flag(name: .shortAndLong, help: "Recursively search directories for Swift files")
     var recursive: Bool = false
-    
+
     @Option(name: .shortAndLong, help: "Number of spaces per indentation level")
     var indentSize: Int = 4
-    
+
     @Flag(help: "Show what would be changed without modifying files")
     var dryRun: Bool = false
-    
+
     func run() async throws {
         print("🔧 SAAE Indentation Fixer")
         print("=========================\n")
-        
+
         guard indentSize > 0 && indentSize <= 16 else {
-            print("❌ Invalid indent size: \(indentSize). Must be between 1 and 16.")
-            throw ExitCode.failure
-        }
-        
+        print("❌ Invalid indent size: \(indentSize). Must be between 1 and 16.")
+        throw ExitCode.failure
+    }
+
         let swiftFiles = try collectSwiftFiles(from: paths, recursive: recursive)
-        
+
         if swiftFiles.isEmpty {
             print("❌ No Swift files found in the specified paths.")
             throw ExitCode.failure
         }
-        
+
         print("📁 Found \(swiftFiles.count) Swift file(s) to reindent...")
         print("🔧 Using \(indentSize)-space indentation")
-        
+
         if dryRun {
             print("🔍 Dry run mode - no files will be modified\n")
         } else {
             print("⚠️  Files will be modified in place\n")
         }
-        
+
         var filesModified = 0
         var totalFiles = 0
-        
+
         for filePath in swiftFiles {
             totalFiles += 1
             let url = URL(fileURLWithPath: filePath)
-            
+
             do {
-                let originalContent = try String(contentsOf: url)
-                let tree = try SyntaxTree(string: originalContent)
-                let reindentedTree = try tree.reindent(indentSize: indentSize)
-                let newContent = reindentedTree.serializeToCode()
-                
-                if originalContent != newContent {
-                    filesModified += 1
-                    
-                    if dryRun {
-                        print("📝 \(filePath): Would be modified")
-                        // Optionally show a brief diff summary
-                        let originalLines = originalContent.components(separatedBy: .newlines).count
-                        let newLines = newContent.components(separatedBy: .newlines).count
-                        print("   Lines: \(originalLines) → \(newLines)")
-                    } else {
-                        try newContent.write(to: url, atomically: true, encoding: .utf8)
-                        print("✅ \(filePath): Reindented")
-                    }
+            let originalContent = try String(contentsOf: url)
+            let tree = try SyntaxTree(string: originalContent)
+            let reindentedTree = try tree.reindent(indentSize: indentSize)
+            let newContent = reindentedTree.serializeToCode()
+
+            if originalContent != newContent {
+                filesModified += 1
+
+                if dryRun {
+                    print("📝 \(filePath): Would be modified")
+// Optionally show a brief diff summary
+                    let originalLines = originalContent.components(separatedBy: .newlines).count
+                    let newLines = newContent.components(separatedBy: .newlines).count
+                    print("   Lines: \(originalLines) → \(newLines)")
                 } else {
-                    print("✓ \(filePath): Already properly indented")
+                    try newContent.write(to: url, atomically: true, encoding: .utf8)
+                    print("✅ \(filePath): Reindented")
                 }
-                
-            } catch {
-                print("❌ \(filePath): Failed to process - \(error)")
+            } else {
+                print("⏭️ \(filePath): Already properly indented")
             }
+
+        } catch {
+            print("❌ \(filePath): Failed to process - \(error)")
         }
-        
+        }
+
         if dryRun {
             print("\n📊 Summary (Dry Run):")
             print("   Files analyzed: \(totalFiles)")
@@ -674,7 +674,7 @@ struct ReindentCommand: AsyncParsableCommand {
             print("   Files modified: \(filesModified)")
             print("   Files already correct: \(totalFiles - filesModified)")
         }
-        
+
         if filesModified > 0 {
             if dryRun {
                 print("\n🔍 Run without --dry-run to apply these changes.")
@@ -685,13 +685,13 @@ struct ReindentCommand: AsyncParsableCommand {
             print("\n✅ All files already have correct indentation!")
         }
     }
-    
+
     private func collectSwiftFiles(from paths: [String], recursive: Bool) throws -> [String] {
         var swiftFiles: [String] = []
-        
+
         for path in paths {
             var isDirectory: ObjCBool = false
-            
+
             if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) {
                 if isDirectory.boolValue {
                     if recursive {
@@ -710,13 +710,13 @@ struct ReindentCommand: AsyncParsableCommand {
                         }
                     }
                 } else if path.hasSuffix(".swift") {
-                    swiftFiles.append(path)
-                }
+                        swiftFiles.append(path)
+                    }
             } else {
                 print("⚠️  Path not found: \(path)")
             }
         }
-        
+
         return swiftFiles.sorted()
     }
 }
@@ -736,7 +736,7 @@ struct FileErrorReport: Codable {
     let errorCount: Int
     let errors: [ErrorDetail]
     let analysisError: String?
-    
+
     init(filePath: String, fileName: String, errorCount: Int, errors: [ErrorDetail], analysisError: String? = nil) {
         self.filePath = filePath
         self.fileName = fileName
@@ -755,7 +755,7 @@ struct ErrorDetail: Codable {
     let sourceContext: [String]
     let fixIts: [FixItDetail]
     let notes: [NoteDetail]
-    
+
     init(from syntaxError: SyntaxErrorDetail) {
         self.message = syntaxError.message
         self.location = LocationInfo(
@@ -783,7 +783,7 @@ struct FixItDetail: Codable {
     let originalText: String
     let replacementText: String
     let location: LocationInfo
-    
+
     init(from fixIt: SyntaxFixIt) {
         self.message = fixIt.message
         self.originalText = fixIt.originalText
@@ -800,7 +800,7 @@ struct NoteDetail: Codable {
     let message: String
     let location: LocationInfo?
     let sourceLineText: String?
-    
+
     init(from note: SyntaxNote) {
         self.message = note.message
         if let loc = note.location {

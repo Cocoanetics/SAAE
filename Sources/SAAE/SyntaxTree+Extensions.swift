@@ -167,3 +167,40 @@ extension SyntaxTree {
         return SyntaxTree(newSourceFile, sourceLines: sourceLines, locationConverter: locationConverter)
     }
 }
+
+// MARK: - Indentation Support
+
+extension SyntaxTree {
+    
+    /// Reindents the entire syntax tree with consistent spacing.
+    ///
+    /// This method applies consistent indentation throughout the syntax tree,
+    /// with configurable indent size and proper handling of nested scopes.
+    ///
+    /// - Parameter indentSize: Number of spaces per indentation level (default: 4)
+    /// - Returns: A new SyntaxTree with consistent indentation applied
+    /// - Throws: SAAEError if the reindented code cannot be parsed
+    ///
+    /// ## Features
+    ///
+    /// - **Configurable spacing**: Set any number of spaces per level
+    /// - **Nested scope handling**: Automatically indents based on nesting
+    /// - **Switch/case support**: Case labels indented deeper than switch
+    /// - **Preserves comments**: Maintains existing documentation and comments
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let tree = try SyntaxTree(string: sourceCode)
+    /// let reindentedTree = try tree.reindent(indentSize: 2) // 2 spaces per level
+    /// let cleanCode = reindentedTree.serializeToCode()
+    /// ```
+    public func reindent(indentSize: Int = 4) throws -> SyntaxTree {
+        let rewriter = IndentationRewriter(indentSize: indentSize)
+        let reindentedSourceFile = rewriter.visit(sourceFile)
+        
+        // Serialize the reindented syntax tree back to code and re-parse
+        let reindentedCode = reindentedSourceFile.description
+        return try SyntaxTree(string: reindentedCode)
+    }
+}

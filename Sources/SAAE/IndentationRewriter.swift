@@ -50,6 +50,7 @@ public class IndentationRewriter: SyntaxRewriter {
         
         // Keep all non-whitespace trivia (comments, etc.) but track newlines
         var hasNewline = false
+        
         for piece in existingTrivia {
             switch piece {
             case .newlines(_), .carriageReturns(_), .carriageReturnLineFeeds(_):
@@ -63,11 +64,10 @@ public class IndentationRewriter: SyntaxRewriter {
             }
         }
         
-        // Add proper indentation if we have a newline or if this is the start of a line
-        if hasNewline || (existingTrivia.isEmpty && level > 0) {
-            if level > 0 {
-                newTrivia.append(.spaces(level * indentSize))
-            }
+        // ONLY add indentation if there's a newline that precedes this node
+        // This prevents adding spaces between tokens on the same line (like "else if")
+        if hasNewline && level > 0 {
+            newTrivia.append(.spaces(level * indentSize))
         }
         
         return node.with(\.leadingTrivia, Trivia(pieces: newTrivia))

@@ -182,4 +182,44 @@ struct IndentationTests {
         #expect(result.contains("        let message = "))
         #expect(result.contains("        let anotherString = "))
     }
+    
+    @Test("Test else-if statements")
+    func testElseIfStatements() throws {
+        let badlyIndentedCode = """
+        public func processNumbers(_ numbers: [Int]) -> [Int] {
+        var result: [Int] = []
+        
+        for number in numbers {
+        if number > 0 {
+        result.append(number * 2)
+        } else if number < 0 {
+        result.append(abs(number))
+        } else {
+        result.append(1)
+        }
+        }
+        
+        return result
+        }
+        """
+        
+        let tree = try SyntaxTree(string: badlyIndentedCode)
+        let reindented = try tree.reindent(indentSize: 4)
+        let result = reindented.serializeToCode()
+        
+        // Check that else-if is properly formatted without extra spaces
+        #expect(result.contains("        } else if number < 0 {"))
+        #expect(!result.contains("} else             if number < 0 {"))
+        
+        // Check proper indentation levels
+        #expect(result.contains("    var result: [Int] = []"))
+        #expect(result.contains("    for number in numbers {"))
+        #expect(result.contains("        if number > 0 {"))
+        #expect(result.contains("            result.append(number * 2)"))
+        #expect(result.contains("        } else if number < 0 {"))
+        #expect(result.contains("            result.append(abs(number))"))
+        #expect(result.contains("        } else {"))
+        #expect(result.contains("            result.append(1)"))
+        #expect(result.contains("    return result"))
+    }
 } 

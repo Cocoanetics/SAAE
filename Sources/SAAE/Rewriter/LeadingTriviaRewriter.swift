@@ -35,15 +35,15 @@ internal class LeadingTriviaRewriter: SyntaxRewriter {
                 var foundNonIndent = false
                 for piece in pieces {
                     switch piece {
-                    case .spaces, .tabs:
-                        if !foundNonIndent {
-                            indent.append(piece)
-                        } else {
+                        case .spaces, .tabs:
+                            if !foundNonIndent {
+                                indent.append(piece)
+                            } else {
+                                rest.append(piece)
+                            }
+                        default:
+                            foundNonIndent = true
                             rest.append(piece)
-                        }
-                    default:
-                        foundNonIndent = true
-                        rest.append(piece)
                     }
                 }
                 var combined: [TriviaPiece] = []

@@ -25,82 +25,82 @@ import Foundation
 /// Each declaration has a unique ``path`` that enables precise location within
 /// the declaration hierarchy, useful for cross-references and navigation.
 public struct DeclarationOverview: Codable {
-    /// Unique path identifier for this declaration within the hierarchy.
-    ///
-    /// The path uses dot notation to represent nesting levels (e.g., "1.2.1").
-    /// This enables precise navigation and cross-referencing within documentation.
+/// Unique path identifier for this declaration within the hierarchy.
+///
+/// The path uses dot notation to represent nesting levels (e.g., "1.2.1").
+/// This enables precise navigation and cross-referencing within documentation.
     public let path: String
-    
-    /// The Swift declaration type (e.g., "class", "func", "var", "enum").
-    ///
-    /// This identifies what kind of Swift construct this declaration represents,
-    /// used for formatting and categorization in output generation.
+
+/// The Swift declaration type (e.g., "class", "func", "var", "enum").
+///
+/// This identifies what kind of Swift construct this declaration represents,
+/// used for formatting and categorization in output generation.
     public let type: String
-    
-    /// The simple name of the declaration.
-    ///
-    /// For most declarations, this is the identifier used in the source code.
-    /// For operators and special methods, this may include the operator symbols.
+
+/// The simple name of the declaration.
+///
+/// For most declarations, this is the identifier used in the source code.
+/// For operators and special methods, this may include the operator symbols.
     public let name: String
-    
-    /// The fully qualified name including parent context, if applicable.
-    ///
-    /// For nested declarations, this includes the parent names separated by dots
-    /// (e.g., "MyClass.NestedStruct.someProperty"). For top-level declarations,
-    /// this may be the same as ``name``.
+
+/// The fully qualified name including parent context, if applicable.
+///
+/// For nested declarations, this includes the parent names separated by dots
+/// (e.g., "MyClass.NestedStruct.someProperty"). For top-level declarations,
+/// this may be the same as ``name``.
     public let fullName: String?
-    
-    /// The complete declaration signature as it appears in source code.
-    ///
-    /// This includes parameter lists, return types, generic constraints,
-    /// and other signature elements, but excludes the implementation body.
+
+/// The complete declaration signature as it appears in source code.
+///
+/// This includes parameter lists, return types, generic constraints,
+/// and other signature elements, but excludes the implementation body.
     public let signature: String?
-    
-    /// The access control level as a string (e.g., "public", "private").
-    ///
-    /// Represents the Swift visibility modifier that controls where
-    /// this declaration can be accessed from.
+
+/// The access control level as a string (e.g., "public", "private").
+///
+/// Represents the Swift visibility modifier that controls where
+/// this declaration can be accessed from.
     public let visibility: String
-    
-    /// Additional Swift modifiers applied to this declaration.
-    ///
-    /// Examples include "static", "final", "override", "async", "throws".
-    /// Returns `nil` if no modifiers are present.
+
+/// Additional Swift modifiers applied to this declaration.
+///
+/// Examples include "static", "final", "override", "async", "throws".
+/// Returns `nil` if no modifiers are present.
     public let modifiers: [String]?
-    
-    /// Swift attributes applied to this declaration.
-    ///
-    /// Examples include "@objc", "@available", "@propertyWrapper".
-    /// Returns `nil` if no attributes are present.
+
+/// Swift attributes applied to this declaration.
+///
+/// Examples include "@objc", "@available", "@propertyWrapper".
+/// Returns `nil` if no attributes are present.
     public let attributes: [String]?
-    
-    /// Structured documentation extracted from Swift documentation comments.
-    ///
-    /// Contains parsed information including description, parameters,
-    /// return values, and throws information. Returns `nil` if no
-    /// documentation is present.
+
+/// Structured documentation extracted from Swift documentation comments.
+///
+/// Contains parsed information including description, parameters,
+/// return values, and throws information. Returns `nil` if no
+/// documentation is present.
     public let documentation: Documentation?
-    
-    /// Nested declarations contained within this declaration.
-    ///
-    /// For container types (classes, structs, enums, protocols), this contains
-    /// their member declarations. Returns `nil` for simple declarations
-    /// that cannot contain members.
+
+/// Nested declarations contained within this declaration.
+///
+/// For container types (classes, structs, enums, protocols), this contains
+/// their member declarations. Returns `nil` for simple declarations
+/// that cannot contain members.
     public let members: [DeclarationOverview]?
-    
-    /// Creates a declaration overview with comprehensive metadata.
-    ///
-    /// - Parameters:
-    ///   - path: Unique hierarchical path identifier.
-    ///   - type: Swift declaration type identifier.
-    ///   - name: Simple declaration name.
-    ///   - fullName: Fully qualified name with context.
-    ///   - signature: Complete declaration signature.
-    ///   - visibility: Access control level string.
-    ///   - modifiers: Array of Swift modifiers.
-    ///   - attributes: Array of Swift attributes.
-    ///   - documentation: Parsed documentation structure.
-    ///   - members: Nested declaration array.
+
+/// Creates a declaration overview with comprehensive metadata.
+///
+/// - Parameters:
+///   - path: Unique hierarchical path identifier.
+///   - type: Swift declaration type identifier.
+///   - name: Simple declaration name.
+///   - fullName: Fully qualified name with context.
+///   - signature: Complete declaration signature.
+///   - visibility: Access control level string.
+///   - modifiers: Array of Swift modifiers.
+///   - attributes: Array of Swift attributes.
+///   - documentation: Parsed documentation structure.
+///   - members: Nested declaration array.
     public init(
         path: String,
         type: String,

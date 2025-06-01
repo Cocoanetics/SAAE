@@ -20,17 +20,17 @@ import Foundation
 /// }
 /// ```
 public enum SAAEError: Error {
-    /// Indicates that the specified file could not be found at the given URL.
-    ///
-    /// - Parameter URL: The file URL that could not be located.
+/// Indicates that the specified file could not be found at the given URL.
+///
+/// - Parameter URL: The file URL that could not be located.
     case fileNotFound(URL)
-    
-    /// Indicates that a file was found but could not be read due to an underlying error.
-    ///
-    /// This typically occurs due to permission issues, file corruption, or other I/O problems.
-    ///
-    /// - Parameters:
-    ///   - URL: The file URL that could not be read.
-    ///   - Error: The underlying error that caused the read failure.
+
+/// Indicates that a file was found but could not be read due to an underlying error.
+///
+/// This typically occurs due to permission issues, file corruption, or other I/O problems.
+///
+/// - Parameters:
+///   - URL: The file URL that could not be read.
+///   - Error: The underlying error that caused the read failure.
     case fileReadError(URL, Error)
 }

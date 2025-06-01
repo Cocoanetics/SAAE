@@ -18,7 +18,7 @@ internal class PathTrackingVisitor: SyntaxVisitor {
         super.init(viewMode: .sourceAccurate)
     }
 
-    // Note: Specific visit methods would be needed here if PathTrackingVisitor
-    // itself was meant to find a specific *type* of node by path.
-    // For the rewriters below, path tracking is re-implemented token-centrically.
+// Note: Specific visit methods would be needed here if PathTrackingVisitor
+// itself was meant to find a specific *type* of node by path.
+// For the rewriters below, path tracking is re-implemented token-centrically.
 }

@@ -258,12 +258,8 @@ struct Phase3_ASTModificationTests {
         #expect(emptyLineInfo.selectedNode == nil, "Should not select any node on non-existent line")
 
         // Test modification on non-existent line
-        do {
+        #expect(throws: NodeOperationError.self) {
             _ = try tree.modifyLeadingTrivia(atLine: 10, newLeadingTriviaText: "/// Doc")
-            #expect(Bool(false), "Should throw error for non-existent line")
-        } catch NodeOperationError.nodeNotFound {
-            // Expected
-            print("Correctly threw error for non-existent line")
         }
 
         // Test with line 0 (invalid)

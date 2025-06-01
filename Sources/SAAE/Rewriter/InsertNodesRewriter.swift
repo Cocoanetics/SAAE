@@ -19,5 +19,5 @@ internal class InsertNodesRewriter: SyntaxRewriter {
         super.init(viewMode: .sourceAccurate)
         self.invalidContextReason = "Node insertion is not implemented."
     }
-    // This rewriter remains a no-op for now as insertion is complex.
+// This rewriter remains a no-op for now as insertion is complex.
 }

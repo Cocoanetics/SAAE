@@ -23,15 +23,15 @@ import Foundation
 /// )
 /// ```
 public enum OutputFormat: String, CaseIterable {
-    /// JSON format - structured data ideal for programmatic consumption and API integration.
+/// JSON format - structured data ideal for programmatic consumption and API integration.
     case json
-    
-    /// YAML format - human-readable structured data format that's easier to read than JSON.
+
+/// YAML format - human-readable structured data format that's easier to read than JSON.
     case yaml
-    
-    /// Markdown format - documentation-friendly format suitable for README files and documentation sites.
+
+/// Markdown format - documentation-friendly format suitable for README files and documentation sites.
     case markdown
-    
-    /// Interface format - Swift-like interface declarations showing clean API signatures without implementation details.
+
+/// Interface format - Swift-like interface declarations showing clean API signatures without implementation details.
     case interface
 }

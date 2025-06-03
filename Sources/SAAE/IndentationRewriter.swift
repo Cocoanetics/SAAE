@@ -148,6 +148,16 @@ public class IndentationRewriter: SyntaxRewriter {
         return super.visit(indentedNode)
     }
 
+// MARK: - Property Accessors
+
+    public override func visit(_ node: AccessorBlockSyntax) -> AccessorBlockSyntax {
+        // Accessor blocks (getter/setter) increase indentation for their contents
+        currentLevel += 1
+        let result = super.visit(node)
+        currentLevel -= 1
+        return result
+    }
+
 // MARK: - Control Flow
 
     public override func visit(_ node: IfExprSyntax) -> ExprSyntax {

@@ -233,4 +233,57 @@ struct IndentationTests {
         
         #expect(result.contains("    return result"))
     }
+
+    @Test("Continuation indent for function parameters")
+    func testContinuationParameters() throws {
+        let code = """
+        public func foo(mainFileURL: URL, physicalFileID: String) throws {
+        NSLog("[%@] Create Variant %@", objectID, config.name )
+        let (imageData, _) = try self.createVariant(config: config,
+        inputURL: mainFileURL,
+        physicalFileID: physicalFileID,
+        sentToVendorUTC: sentToVendorUTC)
+        }
+        """
+
+        let tree = try SyntaxTree(string: code)
+        let reindented = try tree.reindent(indentSize: 4)
+        let result = reindented.serializeToCode()
+
+        let lines = result.split(separator: "\n", omittingEmptySubsequences: false)
+        let configIndex = lines.firstIndex { $0.contains("config: config") }!
+        let nextLine = lines[configIndex + 1]
+        #expect(nextLine.trimmingCharacters(in: .whitespaces).hasPrefix("inputURL:"))
+        let indentCount = nextLine.prefix { $0 == " " }.count
+        #expect(indentCount > 0)
+    }
+
+    @Test("Continuation indent for collection literals")
+    func testContinuationCollections() throws {
+        let code = """
+        public func demo() {
+        let numbers = [
+        1,
+        2,
+        3
+        ]
+        let dict = [
+        "a": 1,
+        "b": 2
+        ]
+        }
+        """
+
+        let tree = try SyntaxTree(string: code)
+        let reindented = try tree.reindent(indentSize: 4)
+        let result = reindented.serializeToCode()
+
+        let collectionLines = result.split(separator: "\n", omittingEmptySubsequences: false)
+        let arrayIndex = collectionLines.firstIndex { $0.contains("let numbers = [") }!
+        let arrayLine1 = String(collectionLines[arrayIndex + 1])
+        #expect(arrayLine1.trimmingCharacters(in: .whitespaces).hasPrefix("1,"))
+        let dictIndex = collectionLines.firstIndex { $0.contains("let dict = [") }!
+        let dictLine1 = String(collectionLines[dictIndex + 1])
+        #expect(dictLine1.trimmingCharacters(in: .whitespaces).hasPrefix("\"a\":"))
+    }
 } 

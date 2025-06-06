@@ -27,7 +27,13 @@ public class IndentationRewriter: SyntaxRewriter {
 /// The number of spaces to use for each indentation level.
     private let indentSize: Int
 
-/// Current indentation level (0-based).
+    /// Stack of indentation columns for bracket continuations
+    private var continuationColumns: [Int] = []
+
+    /// Tracks the current column while rewriting
+    private var currentColumn: Int = 0
+
+    /// Current indentation level (0-based).
     private var currentLevel: Int = 0
 
 /// Creates a new indentation rewriter with the specified indent size.
@@ -41,6 +47,67 @@ public class IndentationRewriter: SyntaxRewriter {
 /// Generates the appropriate indentation string for the current level.
     private func indentationString(level: Int) -> String {
         return String(repeating: " ", count: level * indentSize)
+    }
+
+    /// Applies indentation using an explicit column value (number of spaces)
+    private func applyIndentation(_ token: TokenSyntax, column: Int) -> TokenSyntax {
+        let existingTrivia = token.leadingTrivia
+        var newTrivia: [TriviaPiece] = []
+
+        var hasNewline = false
+        var pendingNewlines: [TriviaPiece] = []
+
+        for piece in existingTrivia {
+            switch piece {
+                case .newlines(_), .carriageReturns(_), .carriageReturnLineFeeds(_):
+                    pendingNewlines.append(piece)
+                    hasNewline = true
+                case .spaces(_), .tabs(_):
+                    continue
+                default:
+                    newTrivia.append(contentsOf: pendingNewlines)
+                    pendingNewlines.removeAll()
+                    newTrivia.append(piece)
+            }
+        }
+
+        newTrivia.append(contentsOf: pendingNewlines)
+
+        if hasNewline {
+            newTrivia.append(.spaces(column))
+        }
+
+        return token.with(\.leadingTrivia, Trivia(pieces: newTrivia))
+    }
+
+    /// Determines if a token is any left bracket
+    private func isLeftBracket(_ kind: TokenKind) -> Bool {
+        switch kind {
+            case .leftParen, .leftSquareBracket, .leftBrace:
+                return true
+            default:
+                return false
+        }
+    }
+
+    /// Determines if a token is any right bracket
+    private func isRightBracket(_ kind: TokenKind) -> Bool {
+        switch kind {
+            case .rightParen, .rightSquareBracket, .rightBrace:
+                return true
+            default:
+                return false
+        }
+    }
+
+    /// Determines if a token is a closing bracket used for indentation purposes
+    private func isClosingBracket(_ kind: TokenKind) -> Bool {
+        switch kind {
+            case .rightParen, .rightSquareBracket, .rightBrace:
+                return true
+            default:
+                return false
+        }
     }
 
 /// Applies proper indentation to a node by replacing its leading trivia.
@@ -326,30 +393,49 @@ public class IndentationRewriter: SyntaxRewriter {
 // MARK: - Tokens (for all tokens that need indentation)
 
     public override func visit(_ token: TokenSyntax) -> TokenSyntax {
-        // Handle closing braces specifically
-        if token.tokenKind == .rightBrace {
-            // Check if this token starts a new line
-            let leadingTrivia = token.leadingTrivia
-            var hasNewlineBefore = false
-            
-            for piece in leadingTrivia {
-                switch piece {
-                    case .newlines(_), .carriageReturns(_), .carriageReturnLineFeeds(_):
-                        hasNewlineBefore = true
-                        break
-                    default:
-                        continue
-                }
-            }
-            
-            if hasNewlineBefore {
-                // Closing braces should be at the outer level (currentLevel - 1)
-                let braceLevel = max(0, currentLevel - 1)
-                return applyIndentation(token, level: braceLevel)
+        let leadingTrivia = token.leadingTrivia
+        var hasNewlineBefore = false
+        var indentColumn = currentColumn
+        var afterNewline = false
+
+        for piece in leadingTrivia {
+            switch piece {
+                case .newlines(_), .carriageReturns(_), .carriageReturnLineFeeds(_):
+                    hasNewlineBefore = true
+                    afterNewline = true
+                    indentColumn = 0
+                case .spaces(let count):
+                    if afterNewline { indentColumn += count }
+                case .tabs(let count):
+                    if afterNewline { indentColumn += count * indentSize }
+                default:
+                    break
             }
         }
-        
-        return super.visit(token)
+
+        var modifiedToken = token
+
+        if hasNewlineBefore, let column = continuationColumns.last, !isClosingBracket(token.tokenKind) {
+            modifiedToken = applyIndentation(token, column: column)
+            indentColumn = column
+        } else if token.tokenKind == .rightBrace && hasNewlineBefore {
+            let braceLevel = max(0, currentLevel - 1)
+            modifiedToken = applyIndentation(token, level: braceLevel)
+            indentColumn = braceLevel * indentSize
+        }
+
+        let columnBeforeToken = hasNewlineBefore ? indentColumn : currentColumn
+        let columnAfterToken = columnBeforeToken + modifiedToken.text.count
+
+        if isLeftBracket(modifiedToken.tokenKind) {
+            continuationColumns.append(columnAfterToken)
+        } else if isRightBracket(modifiedToken.tokenKind) {
+            if !continuationColumns.isEmpty { continuationColumns.removeLast() }
+        }
+
+        currentColumn = columnAfterToken
+
+        return super.visit(modifiedToken)
     }
 
     public override func visit(_ node: TryExprSyntax) -> ExprSyntax {

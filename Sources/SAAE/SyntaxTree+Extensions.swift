@@ -196,7 +196,7 @@ extension SyntaxTree {
 /// let cleanCode = reindentedTree.serializeToCode()
 /// ```
     public func reindent(indentSize: Int = 4) throws -> SyntaxTree {
-        let rewriter = IndentationRewriter(indentSize: indentSize, locationConverter: locationConverter)
+        let rewriter = IndentationRewriter(indentSize: indentSize)
         let reindentedSourceFile = rewriter.visit(sourceFile)
 
 // Serialize the reindented syntax tree back to code and re-parse

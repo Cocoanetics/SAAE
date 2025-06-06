@@ -27,11 +27,11 @@ public class IndentationRewriter: SyntaxRewriter {
 /// The number of spaces to use for each indentation level.
     private let indentSize: Int
 
-    /// Source location converter for precise column calculations
-    private let locationConverter: SourceLocationConverter
-
     /// Stack of indentation columns for bracket continuations
     private var continuationColumns: [Int] = []
+
+    /// Tracks the current column while rewriting
+    private var currentColumn: Int = 0
 
     /// Current indentation level (0-based).
     private var currentLevel: Int = 0
@@ -39,9 +39,8 @@ public class IndentationRewriter: SyntaxRewriter {
 /// Creates a new indentation rewriter with the specified indent size.
 ///
 /// - Parameter indentSize: Number of spaces per indentation level (default: 4)
-    public init(indentSize: Int = 4, locationConverter: SourceLocationConverter) {
+    public init(indentSize: Int = 4) {
         self.indentSize = indentSize
-        self.locationConverter = locationConverter
         super.init()
     }
 
@@ -396,34 +395,45 @@ public class IndentationRewriter: SyntaxRewriter {
     public override func visit(_ token: TokenSyntax) -> TokenSyntax {
         let leadingTrivia = token.leadingTrivia
         var hasNewlineBefore = false
+        var indentColumn = currentColumn
+        var afterNewline = false
 
         for piece in leadingTrivia {
             switch piece {
                 case .newlines(_), .carriageReturns(_), .carriageReturnLineFeeds(_):
                     hasNewlineBefore = true
+                    afterNewline = true
+                    indentColumn = 0
+                case .spaces(let count):
+                    if afterNewline { indentColumn += count }
+                case .tabs(let count):
+                    if afterNewline { indentColumn += count * indentSize }
                 default:
-                    continue
+                    break
             }
         }
 
         var modifiedToken = token
 
-        // Apply continuation indentation when inside brackets
         if hasNewlineBefore, let column = continuationColumns.last, !isClosingBracket(token.tokenKind) {
             modifiedToken = applyIndentation(token, column: column)
+            indentColumn = column
         } else if token.tokenKind == .rightBrace && hasNewlineBefore {
             let braceLevel = max(0, currentLevel - 1)
             modifiedToken = applyIndentation(token, level: braceLevel)
+            indentColumn = braceLevel * indentSize
         }
 
-        // Manage bracket stack for continuation columns
-        if isLeftBracket(token.tokenKind) {
-            let loc = locationConverter.location(for: token.endPositionBeforeTrailingTrivia)
-            let column = Int(loc.column - 1)
-            continuationColumns.append(column)
-        } else if isRightBracket(token.tokenKind) {
+        let columnBeforeToken = hasNewlineBefore ? indentColumn : currentColumn
+        let columnAfterToken = columnBeforeToken + modifiedToken.text.count
+
+        if isLeftBracket(modifiedToken.tokenKind) {
+            continuationColumns.append(columnAfterToken)
+        } else if isRightBracket(modifiedToken.tokenKind) {
             if !continuationColumns.isEmpty { continuationColumns.removeLast() }
         }
+
+        currentColumn = columnAfterToken
 
         return super.visit(modifiedToken)
     }

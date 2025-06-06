@@ -83,7 +83,7 @@ public class IndentationRewriter: SyntaxRewriter {
     /// Determines if a token is any left bracket
     private func isLeftBracket(_ kind: TokenKind) -> Bool {
         switch kind {
-            case .leftParen, .leftSquareBracket:
+            case .leftParen, .leftSquareBracket, .leftBrace:
                 return true
             default:
                 return false
@@ -93,7 +93,7 @@ public class IndentationRewriter: SyntaxRewriter {
     /// Determines if a token is any right bracket
     private func isRightBracket(_ kind: TokenKind) -> Bool {
         switch kind {
-            case .rightParen, .rightSquareBracket:
+            case .rightParen, .rightSquareBracket, .rightBrace:
                 return true
             default:
                 return false
@@ -103,7 +103,7 @@ public class IndentationRewriter: SyntaxRewriter {
     /// Determines if a token is a closing bracket used for indentation purposes
     private func isClosingBracket(_ kind: TokenKind) -> Bool {
         switch kind {
-            case .rightParen, .rightSquareBracket:
+            case .rightParen, .rightSquareBracket, .rightBrace:
                 return true
             default:
                 return false
